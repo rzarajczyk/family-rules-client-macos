@@ -1,53 +1,31 @@
 # FamilyRules macOS Client
 
-This repository currently contains step 1 from the implementation plan: a native macOS project skeleton with:
+This repository currently contains steps 1 and 2 from the implementation plan:
 
-- `FamilyRulesAgent`: a menu bar app
+- `FamilyRulesAgent`: a native macOS menu bar app
 - `FamilyRulesHelper`: an embedded XPC helper skeleton
-- a basic helper ping flow shown in a diagnostics window
-- placeholder signing configuration for Xcode
-
-## Tooling Status On This Machine
-
-I verified the currently installed Apple tooling before implementation:
-
-- `swift --version`: installed
-- `xcode-select -p`: points to Command Line Tools only
-- `xcodebuild -version`: failed because full Xcode is not installed or not selected
-- `xcodegen`: not installed
-
-Current result: you can edit the project files now, but you cannot build the macOS app until full Xcode is installed and selected.
-
-## What You Need To Install
-
-1. Install Xcode from the Mac App Store.
-2. Open Xcode once and accept the license if prompted.
-3. Switch the active developer directory to Xcode.
-
-Run:
-
-```bash
-sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
-```
-
-4. Verify the switch worked.
-
-Run:
-
-```bash
-xcodebuild -version
-swift --version
-```
-
-Expected result: `xcodebuild` should print an Xcode version instead of the Command Line Tools error.
+- helper ping diagnostics
+- initial setup window
+- `POST /api/v2/register-instance` integration
+- secure persistence split across SQLite and Keychain
 
 ## Project Layout
 
 - `FamilyRulesClient.xcodeproj`: Xcode project
 - `FamilyRulesAgent/`: menu bar app code
 - `FamilyRulesHelper/`: XPC helper code
-- `Shared/`: code shared between agent and helper
+- `Shared/`: shared XPC protocol code
 - `Config/`: `Info.plist` and entitlements
+
+## Requirements
+
+You need:
+
+- macOS
+- Xcode installed
+- an Apple signing identity configured in Xcode
+- a reachable FamilyRules server
+- a valid parent username and password on that server
 
 ## Open The Project In Xcode
 
@@ -56,8 +34,6 @@ Expected result: `xcodebuild` should print an Xcode version instead of the Comma
 3. Open `FamilyRulesClient.xcodeproj`.
 
 ## Configure Signing In Xcode
-
-You need to do this once before the app can run on your Mac.
 
 1. In Xcode, select the project navigator on the left.
 2. Click the top-level project `FamilyRulesClient`.
@@ -76,71 +52,161 @@ If you change the helper bundle identifier, also update `Shared/FamilyRulesHelpe
 
 ## Build And Run The App
 
-1. In Xcode, select the `FamilyRulesAgent` scheme near the top toolbar.
+1. In Xcode, select the `FamilyRulesAgent` scheme.
 2. Choose `My Mac` as the run destination.
-3. Press the Run button or use `Cmd+R`.
-4. Look for a shield icon in the macOS menu bar near the clock.
-5. Click the menu bar icon.
-6. Choose `Open Diagnostics`.
-7. In the diagnostics window, click `Ping Helper`.
+3. Press `Cmd+R`.
+4. Look for the shield icon in the menu bar near the clock.
 
-Expected result:
+On first run, the setup window should open automatically.
 
-- the app runs as a menu bar app
-- it does not appear as a normal Dock app
+## Initial Setup Flow
+
+The setup window asks for:
+
+- server URL
+- parent username
+- parent password
+- instance name
+
+### Fill In The Form
+
+1. Enter the server URL, for example `https://your-server.example.com`.
+2. Enter the parent username.
+3. Enter the parent password.
+4. Enter the instance name for this Mac.
+5. Click `Register`.
+
+### Expected Result
+
+If registration succeeds:
+
+- the setup window closes
 - the diagnostics window opens
-- `Helper Reachability` changes to `Reachable`
-- `Last Helper Reply` shows a `pong from helper ...` message
+- diagnostics show `Registration: Registered`
+- the instance ID is shown in diagnostics
+- restarting the app should skip setup and keep the registration
 
-## What Step 1 Includes
+If registration fails:
 
-- Menu bar app skeleton
-- Debug-only quit item
-- Diagnostics window
-- Basic helper communication over XPC
-- Xcode target structure for app and helper
-- Placeholder signing and entitlements setup
+- the setup window stays open
+- an error message is shown inline
 
-## What Step 1 Does Not Include Yet
+## What Gets Stored Where
 
-- initial setup flow
-- server registration
-- persistence
-- reporting
-- app usage collection
-- start-at-login
-- helper blessing / privileged daemon install
-- watchdog / relaunch behavior
+Step 2 intentionally splits persistence:
 
-Those are planned for later steps in `PLAN.md`.
+- SQLite stores:
+  - server URL
+  - username
+  - instance ID
+  - instance name
+- Keychain stores:
+  - instance token
 
-## Command-Line Build After Xcode Is Installed
+### SQLite Location
 
-After Xcode is installed and signing is configured in Xcode, you can try:
+The SQLite database is stored at:
+
+`~/Library/Application Support/FamilyRulesAgent/FamilyRules.sqlite3`
+
+### Keychain Entry
+
+The token is stored in Keychain under:
+
+- service: `com.familyrules.agent.registration`
+- account: `instanceToken`
+
+## Diagnostics Window
+
+Open it from the menu bar with `Open Diagnostics`.
+
+It shows:
+
+- registration status
+- saved server URL
+- saved username
+- saved instance name
+- saved instance ID
+- helper reachability
+- last helper reply
+- service-management status
+
+You can also use `Open Setup` from the menu if you want to bring the setup window back manually.
+
+## Command-Line Build
+
+You can build from Terminal with:
 
 ```bash
 xcodebuild -project FamilyRulesClient.xcodeproj -scheme FamilyRulesAgent -configuration Debug build
 ```
 
-If signing is not configured yet, Xcode will usually show a signing error. Fix signing in the GUI first, then retry.
+## Command-Line Tests
+
+You can run the unit tests from Terminal with:
+
+```bash
+xcodebuild -project FamilyRulesClient.xcodeproj -scheme FamilyRulesAgent -configuration Debug test
+```
+
+The current test suite covers:
+
+- `AppModel` registration loading and save behavior
+- `RegistrationClient` request construction and server status mapping
+
+## Manual Test For Step 2
+
+1. Run the app from Xcode.
+2. Confirm the setup window appears automatically if the app is not registered yet.
+3. Complete registration with real server credentials.
+4. Confirm diagnostics shows `Registered` and the returned instance ID.
+5. Stop the app.
+6. Run it again.
+7. Confirm setup does not appear again.
+8. Open diagnostics and confirm the saved registration is still loaded.
+
+## What Step 2 Includes
+
+- initial setup UI
+- registration against `POST /api/v2/register-instance`
+- registration persistence in SQLite and Keychain
+- startup logic for registered vs unregistered state
+- diagnostics updated to show registration state
+
+## What Step 2 Does Not Include Yet
+
+- periodic `client-info`
+- periodic `/report`
+- app usage collection
+- start-at-login
+- watchdog relaunch
+- permissions flow
+- blocked app handling
+- lock/logout flows
+
+Those are planned in later steps in `PLAN.md`.
 
 ## Troubleshooting
 
-If `xcodebuild -version` still fails:
+If setup succeeds but is forgotten after restart:
 
-1. Check whether `/Applications/Xcode.app` exists.
-2. Re-run:
+1. Check whether `~/Library/Application Support/FamilyRulesAgent/FamilyRules.sqlite3` exists.
+2. Open diagnostics and see whether a startup error is shown.
+3. Check whether the Keychain entry exists for service `com.familyrules.agent.registration`.
 
-```bash
-sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
-```
+If registration fails with `INVALID_PASSWORD`:
 
-3. Open Xcode manually once.
-4. Retry `xcodebuild -version`.
+1. Re-check the parent username.
+2. Re-check the parent password.
+3. Confirm the account exists on the server.
+
+If registration fails with `INSTANCE_ALREADY_EXISTS`:
+
+1. Change the instance name.
+2. Register again.
 
 If the helper ping fails:
 
-1. Confirm the app target embeds `FamilyRulesHelper.xpc`.
-2. Confirm the helper bundle identifier matches `HelperXPC.serviceName`.
-3. Clean the build folder in Xcode: `Product` -> `Clean Build Folder`.
-4. Run again.
+1. Clean the build folder in Xcode: `Product` -> `Clean Build Folder`.
+2. Run the app again.
+3. Open diagnostics and retry `Ping Helper`.

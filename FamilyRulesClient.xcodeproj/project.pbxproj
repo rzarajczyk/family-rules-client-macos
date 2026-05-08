@@ -15,6 +15,13 @@
 		A10000060000000000000001 /* FamilyRulesHelperXPCProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001060000000000000001 /* FamilyRulesHelperXPCProtocol.swift */; };
 		A10000070000000000000001 /* main.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001070000000000000001 /* main.swift */; };
 		A10000080000000000000001 /* FamilyRulesHelperXPCProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001060000000000000001 /* FamilyRulesHelperXPCProtocol.swift */; };
+		A10000090000000000000002 /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001090000000000000002 /* AppModel.swift */; };
+		A10000100000000000000002 /* RegistrationClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001100000000000000002 /* RegistrationClient.swift */; };
+		A10000110000000000000002 /* RegistrationStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001110000000000000002 /* RegistrationStore.swift */; };
+		A10000120000000000000002 /* SetupView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001120000000000000002 /* SetupView.swift */; };
+		A10000130000000000000002 /* AppModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001130000000000000002 /* AppModelTests.swift */; };
+		A10000140000000000000002 /* RegistrationClientTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001140000000000000002 /* RegistrationClientTests.swift */; };
+		A10000150000000000000002 /* FamilyRulesAgent.app in Frameworks */ = {isa = PBXBuildFile; fileRef = A10002010000000000000001 /* FamilyRulesAgent.app */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -24,6 +31,13 @@
 			proxyType = 1;
 			remoteGlobalIDString = A10005020000000000000001;
 			remoteInfo = FamilyRulesHelper;
+		};
+		A10003020000000000000002 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = A10004010000000000000001 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = A10005010000000000000001;
+			remoteInfo = FamilyRulesAgent;
 		};
 /* End PBXContainerItemProxy section */
 
@@ -36,11 +50,18 @@
 		A10001060000000000000001 /* FamilyRulesHelperXPCProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FamilyRulesHelperXPCProtocol.swift; sourceTree = "<group>"; };
 		A10001070000000000000001 /* main.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = main.swift; sourceTree = "<group>"; };
 		A10001080000000000000001 /* FamilyRulesAgent-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "FamilyRulesAgent-Info.plist"; sourceTree = "<group>"; };
+		A10001090000000000000002 /* AppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModel.swift; sourceTree = "<group>"; };
 		A10001090000000000000001 /* FamilyRulesHelper-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "FamilyRulesHelper-Info.plist"; sourceTree = "<group>"; };
 		A10001100000000000000001 /* FamilyRulesAgent.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = FamilyRulesAgent.entitlements; sourceTree = "<group>"; };
+		A10001100000000000000002 /* RegistrationClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RegistrationClient.swift; sourceTree = "<group>"; };
 		A10001110000000000000001 /* FamilyRulesHelper.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = FamilyRulesHelper.entitlements; sourceTree = "<group>"; };
+		A10001110000000000000002 /* RegistrationStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RegistrationStore.swift; sourceTree = "<group>"; };
+		A10001120000000000000002 /* SetupView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SetupView.swift; sourceTree = "<group>"; };
+		A10001130000000000000002 /* AppModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModelTests.swift; sourceTree = "<group>"; };
+		A10001140000000000000002 /* RegistrationClientTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RegistrationClientTests.swift; sourceTree = "<group>"; };
 		A10002010000000000000001 /* FamilyRulesAgent.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = FamilyRulesAgent.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		A10002020000000000000001 /* FamilyRulesHelper.xpc */ = {isa = PBXFileReference; explicitFileType = "wrapper.xpc-service"; includeInIndex = 0; path = FamilyRulesHelper.xpc; sourceTree = BUILT_PRODUCTS_DIR; };
+		A10002030000000000000002 /* FamilyRulesAgentTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = FamilyRulesAgentTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -58,6 +79,14 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		A10007030000000000000002 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A10000150000000000000002 /* FamilyRulesAgent.app in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -66,6 +95,7 @@
 			children = (
 				A10008020000000000000001 /* FamilyRulesAgent */,
 				A10008030000000000000001 /* FamilyRulesHelper */,
+				A10008070000000000000002 /* FamilyRulesAgentTests */,
 				A10008040000000000000001 /* Shared */,
 				A10008050000000000000001 /* Config */,
 				A10008060000000000000001 /* Products */,
@@ -75,11 +105,15 @@
 		A10008020000000000000001 /* FamilyRulesAgent */ = {
 			isa = PBXGroup;
 			children = (
+				A10001090000000000000002 /* AppModel.swift */,
 				A10001010000000000000001 /* AppDelegate.swift */,
 				A10001020000000000000001 /* DiagnosticsStore.swift */,
 				A10001030000000000000001 /* DiagnosticsView.swift */,
 				A10001040000000000000001 /* FamilyRulesAgentApp.swift */,
 				A10001050000000000000001 /* HelperXPCClient.swift */,
+				A10001100000000000000002 /* RegistrationClient.swift */,
+				A10001110000000000000002 /* RegistrationStore.swift */,
+				A10001120000000000000002 /* SetupView.swift */,
 			);
 			path = FamilyRulesAgent;
 			sourceTree = "<group>";
@@ -116,8 +150,18 @@
 			children = (
 				A10002010000000000000001 /* FamilyRulesAgent.app */,
 				A10002020000000000000001 /* FamilyRulesHelper.xpc */,
+				A10002030000000000000002 /* FamilyRulesAgentTests.xctest */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		A10008070000000000000002 /* FamilyRulesAgentTests */ = {
+			isa = PBXGroup;
+			children = (
+				A10001130000000000000002 /* AppModelTests.swift */,
+				A10001140000000000000002 /* RegistrationClientTests.swift */,
+			);
+			path = FamilyRulesAgentTests;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -159,6 +203,24 @@
 			productReference = A10002020000000000000001 /* FamilyRulesHelper.xpc */;
 			productType = "com.apple.product-type.xpc-service";
 		};
+		A10005030000000000000002 /* FamilyRulesAgentTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A10010030000000000000002 /* Build configuration list for PBXNativeTarget "FamilyRulesAgentTests" */;
+			buildPhases = (
+				A10009030000000000000002 /* Sources */,
+				A10007030000000000000002 /* Frameworks */,
+				A10011030000000000000002 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				A10012020000000000000002 /* PBXTargetDependency */,
+			);
+			name = FamilyRulesAgentTests;
+			productName = FamilyRulesAgentTests;
+			productReference = A10002030000000000000002 /* FamilyRulesAgentTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -192,6 +254,7 @@
 			targets = (
 				A10005010000000000000001 /* FamilyRulesAgent */,
 				A10005020000000000000001 /* FamilyRulesHelper */,
+				A10005030000000000000002 /* FamilyRulesAgentTests */,
 			);
 		};
 /* End PBXProject section */
@@ -205,6 +268,13 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		A10011020000000000000001 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A10011030000000000000002 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -242,12 +312,16 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				A10000090000000000000002 /* AppModel.swift in Sources */,
 				A10000010000000000000001 /* AppDelegate.swift in Sources */,
 				A10000020000000000000001 /* DiagnosticsStore.swift in Sources */,
 				A10000030000000000000001 /* DiagnosticsView.swift in Sources */,
 				A10000040000000000000001 /* FamilyRulesAgentApp.swift in Sources */,
 				A10000050000000000000001 /* HelperXPCClient.swift in Sources */,
 				A10000060000000000000001 /* FamilyRulesHelperXPCProtocol.swift in Sources */,
+				A10000100000000000000002 /* RegistrationClient.swift in Sources */,
+				A10000110000000000000002 /* RegistrationStore.swift in Sources */,
+				A10000120000000000000002 /* SetupView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -260,6 +334,15 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		A10009030000000000000002 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A10000130000000000000002 /* AppModelTests.swift in Sources */,
+				A10000140000000000000002 /* RegistrationClientTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -267,6 +350,11 @@
 			isa = PBXTargetDependency;
 			target = A10005020000000000000001 /* FamilyRulesHelper */;
 			targetProxy = A10003010000000000000001 /* PBXContainerItemProxy */;
+		};
+		A10012020000000000000002 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = A10005010000000000000001 /* FamilyRulesAgent */;
+			targetProxy = A10003020000000000000002 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -333,6 +421,10 @@
 					"@executable_path/../Frameworks",
 				);
 				MARKETING_VERSION = 0.1.0;
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-lsqlite3",
+				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.familyrules.agent;
 				PRODUCT_NAME = FamilyRulesAgent;
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -357,6 +449,10 @@
 					"@executable_path/../Frameworks",
 				);
 				MARKETING_VERSION = 0.1.0;
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-lsqlite3",
+				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.familyrules.agent;
 				PRODUCT_NAME = FamilyRulesAgent;
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -419,6 +515,57 @@
 			};
 			name = Release;
 		};
+		A10014070000000000000002 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 8QMDCQHY5B;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = FamilyRulesAgentTests;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@loader_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.familyrules.agent.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/FamilyRulesAgent.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/FamilyRulesAgent";
+			};
+			name = Debug;
+		};
+		A10014080000000000000002 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 8QMDCQHY5B;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = FamilyRulesAgentTests;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@loader_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.familyrules.agent.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/FamilyRulesAgent.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/FamilyRulesAgent";
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -436,6 +583,15 @@
 			buildConfigurations = (
 				A10014050000000000000001 /* Debug */,
 				A10014060000000000000001 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		A10010030000000000000002 /* Build configuration list for PBXNativeTarget "FamilyRulesAgentTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A10014070000000000000002 /* Debug */,
+				A10014080000000000000002 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

@@ -1,39 +1,44 @@
 import Foundation
 
 final class HelperXPCClient {
-    func ping(completion: @escaping (Result<String, Error>) -> Void) {
-        let connection = NSXPCConnection(serviceName: HelperXPC.serviceName)
-        connection.remoteObjectInterface = NSXPCInterface(with: FamilyRulesHelperXPCProtocol.self)
+    /// Sends a ping to the XPC helper and returns the reply.
+    /// Always safe to call from any isolation context; the underlying XPC
+    /// reply is bridged through a checked continuation.
+    func ping() async throws -> String {
+        return try await withCheckedThrowingContinuation { continuation in
+            let connection = NSXPCConnection(serviceName: HelperXPC.serviceName)
+            connection.remoteObjectInterface = NSXPCInterface(with: FamilyRulesHelperXPCProtocol.self)
 
-        var didFinish = false
-        let finish: (Result<String, Error>) -> Void = { result in
-            guard !didFinish else { return }
-            didFinish = true
-            completion(result)
-            connection.invalidate()
-        }
+            var didFinish = false
+            let finish: (Result<String, Error>) -> Void = { result in
+                guard !didFinish else { return }
+                didFinish = true
+                connection.invalidate()
+                continuation.resume(with: result)
+            }
 
-        connection.interruptionHandler = {
-            finish(.failure(XPCClientError.interrupted))
-        }
+            connection.interruptionHandler = {
+                finish(.failure(XPCClientError.interrupted))
+            }
 
-        connection.invalidationHandler = {
-            finish(.failure(XPCClientError.invalidated))
-        }
+            connection.invalidationHandler = {
+                finish(.failure(XPCClientError.invalidated))
+            }
 
-        connection.resume()
+            connection.resume()
 
-        let proxy = connection.remoteObjectProxyWithErrorHandler { error in
-            finish(.failure(error))
-        }
+            let proxy = connection.remoteObjectProxyWithErrorHandler { error in
+                finish(.failure(error))
+            }
 
-        guard let helper = proxy as? FamilyRulesHelperXPCProtocol else {
-            finish(.failure(XPCClientError.invalidProxy))
-            return
-        }
+            guard let helper = proxy as? FamilyRulesHelperXPCProtocol else {
+                finish(.failure(XPCClientError.invalidProxy))
+                return
+            }
 
-        helper.ping { reply in
-            finish(.success(reply))
+            helper.ping { reply in
+                finish(.success(reply))
+            }
         }
     }
 }

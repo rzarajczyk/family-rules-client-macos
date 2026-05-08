@@ -15,18 +15,14 @@ final class DiagnosticsStore: ObservableObject {
     func performPing() {
         helperConnectionState = "Connecting"
 
-        HelperXPCClient().ping { [weak self] result in
-            Task { @MainActor in
-                guard let self else { return }
-
-                switch result {
-                case let .success(reply):
-                    self.helperConnectionState = "Reachable"
-                    self.helperLastReply = reply
-                case let .failure(error):
-                    self.helperConnectionState = "Failed"
-                    self.helperLastReply = error.localizedDescription
-                }
+        Task {
+            do {
+                let reply = try await HelperXPCClient().ping()
+                helperConnectionState = "Reachable"
+                helperLastReply = reply
+            } catch {
+                helperConnectionState = "Failed"
+                helperLastReply = error.localizedDescription
             }
         }
     }
