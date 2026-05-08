@@ -1,0 +1,455 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 56;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		A10000010000000000000001 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001010000000000000001 /* AppDelegate.swift */; };
+		A10000020000000000000001 /* DiagnosticsStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001020000000000000001 /* DiagnosticsStore.swift */; };
+		A10000030000000000000001 /* DiagnosticsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001030000000000000001 /* DiagnosticsView.swift */; };
+		A10000040000000000000001 /* FamilyRulesAgentApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001040000000000000001 /* FamilyRulesAgentApp.swift */; };
+		A10000050000000000000001 /* HelperXPCClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001050000000000000001 /* HelperXPCClient.swift */; };
+		A10000060000000000000001 /* FamilyRulesHelperXPCProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001060000000000000001 /* FamilyRulesHelperXPCProtocol.swift */; };
+		A10000070000000000000001 /* main.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001070000000000000001 /* main.swift */; };
+		A10000080000000000000001 /* FamilyRulesHelperXPCProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001060000000000000001 /* FamilyRulesHelperXPCProtocol.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		A10003010000000000000001 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = A10004010000000000000001 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = A10005020000000000000001;
+			remoteInfo = FamilyRulesHelper;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXFileReference section */
+		A10001010000000000000001 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
+		A10001020000000000000001 /* DiagnosticsStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiagnosticsStore.swift; sourceTree = "<group>"; };
+		A10001030000000000000001 /* DiagnosticsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiagnosticsView.swift; sourceTree = "<group>"; };
+		A10001040000000000000001 /* FamilyRulesAgentApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FamilyRulesAgentApp.swift; sourceTree = "<group>"; };
+		A10001050000000000000001 /* HelperXPCClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HelperXPCClient.swift; sourceTree = "<group>"; };
+		A10001060000000000000001 /* FamilyRulesHelperXPCProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FamilyRulesHelperXPCProtocol.swift; sourceTree = "<group>"; };
+		A10001070000000000000001 /* main.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = main.swift; sourceTree = "<group>"; };
+		A10001080000000000000001 /* FamilyRulesAgent-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "FamilyRulesAgent-Info.plist"; sourceTree = "<group>"; };
+		A10001090000000000000001 /* FamilyRulesHelper-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "FamilyRulesHelper-Info.plist"; sourceTree = "<group>"; };
+		A10001100000000000000001 /* FamilyRulesAgent.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = FamilyRulesAgent.entitlements; sourceTree = "<group>"; };
+		A10001110000000000000001 /* FamilyRulesHelper.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = FamilyRulesHelper.entitlements; sourceTree = "<group>"; };
+		A10002010000000000000001 /* FamilyRulesAgent.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = FamilyRulesAgent.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		A10002020000000000000001 /* FamilyRulesHelper.xpc */ = {isa = PBXFileReference; explicitFileType = "wrapper.xpc-service"; includeInIndex = 0; path = FamilyRulesHelper.xpc; sourceTree = BUILT_PRODUCTS_DIR; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		A10007010000000000000001 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A10007020000000000000001 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		A10008010000000000000001 = {
+			isa = PBXGroup;
+			children = (
+				A10008020000000000000001 /* FamilyRulesAgent */,
+				A10008030000000000000001 /* FamilyRulesHelper */,
+				A10008040000000000000001 /* Shared */,
+				A10008050000000000000001 /* Config */,
+				A10008060000000000000001 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		A10008020000000000000001 /* FamilyRulesAgent */ = {
+			isa = PBXGroup;
+			children = (
+				A10001010000000000000001 /* AppDelegate.swift */,
+				A10001020000000000000001 /* DiagnosticsStore.swift */,
+				A10001030000000000000001 /* DiagnosticsView.swift */,
+				A10001040000000000000001 /* FamilyRulesAgentApp.swift */,
+				A10001050000000000000001 /* HelperXPCClient.swift */,
+			);
+			path = FamilyRulesAgent;
+			sourceTree = "<group>";
+		};
+		A10008030000000000000001 /* FamilyRulesHelper */ = {
+			isa = PBXGroup;
+			children = (
+				A10001070000000000000001 /* main.swift */,
+			);
+			path = FamilyRulesHelper;
+			sourceTree = "<group>";
+		};
+		A10008040000000000000001 /* Shared */ = {
+			isa = PBXGroup;
+			children = (
+				A10001060000000000000001 /* FamilyRulesHelperXPCProtocol.swift */,
+			);
+			path = Shared;
+			sourceTree = "<group>";
+		};
+		A10008050000000000000001 /* Config */ = {
+			isa = PBXGroup;
+			children = (
+				A10001080000000000000001 /* FamilyRulesAgent-Info.plist */,
+				A10001090000000000000001 /* FamilyRulesHelper-Info.plist */,
+				A10001100000000000000001 /* FamilyRulesAgent.entitlements */,
+				A10001110000000000000001 /* FamilyRulesHelper.entitlements */,
+			);
+			path = Config;
+			sourceTree = "<group>";
+		};
+		A10008060000000000000001 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				A10002010000000000000001 /* FamilyRulesAgent.app */,
+				A10002020000000000000001 /* FamilyRulesHelper.xpc */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		A10005010000000000000001 /* FamilyRulesAgent */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A10010010000000000000001 /* Build configuration list for PBXNativeTarget "FamilyRulesAgent" */;
+			buildPhases = (
+				A10009010000000000000001 /* Sources */,
+				A10007010000000000000001 /* Frameworks */,
+				A10011010000000000000001 /* Resources */,
+				A10015010000000000000001 /* Embed XPC Service Script */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				A10012010000000000000001 /* PBXTargetDependency */,
+			);
+			name = FamilyRulesAgent;
+			productName = FamilyRulesAgent;
+			productReference = A10002010000000000000001 /* FamilyRulesAgent.app */;
+			productType = "com.apple.product-type.application";
+		};
+		A10005020000000000000001 /* FamilyRulesHelper */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A10010020000000000000001 /* Build configuration list for PBXNativeTarget "FamilyRulesHelper" */;
+			buildPhases = (
+				A10009020000000000000001 /* Sources */,
+				A10007020000000000000001 /* Frameworks */,
+				A10011020000000000000001 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = FamilyRulesHelper;
+			productName = FamilyRulesHelper;
+			productReference = A10002020000000000000001 /* FamilyRulesHelper.xpc */;
+			productType = "com.apple.product-type.xpc-service";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		A10004010000000000000001 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 1600;
+				LastUpgradeCheck = 1600;
+				TargetAttributes = {
+					A10005010000000000000001 = {
+						CreatedOnToolsVersion = 16.0;
+					};
+					A10005020000000000000001 = {
+						CreatedOnToolsVersion = 16.0;
+					};
+				};
+			};
+			buildConfigurationList = A10013010000000000000001 /* Build configuration list for PBXProject "FamilyRulesClient" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = A10008010000000000000001;
+			productRefGroup = A10008060000000000000001 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				A10005010000000000000001 /* FamilyRulesAgent */,
+				A10005020000000000000001 /* FamilyRulesHelper */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		A10011010000000000000001 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A10011020000000000000001 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		A10015010000000000000001 /* Embed XPC Service Script */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+				"$(BUILT_PRODUCTS_DIR)/FamilyRulesHelper.xpc",
+			);
+			name = "Embed XPC Service Script";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"$(TARGET_BUILD_DIR)/$(CONTENTS_FOLDER_PATH)/XPCServices/FamilyRulesHelper.xpc",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "set -e\nrm -rf \"$TARGET_BUILD_DIR/$CONTENTS_FOLDER_PATH/XPCServices/FamilyRulesHelper.xpc\"\nmkdir -p \"$TARGET_BUILD_DIR/$CONTENTS_FOLDER_PATH/XPCServices\"\ncp -R \"$BUILT_PRODUCTS_DIR/FamilyRulesHelper.xpc\" \"$TARGET_BUILD_DIR/$CONTENTS_FOLDER_PATH/XPCServices/FamilyRulesHelper.xpc\"\n";
+			showEnvVarsInLog = 0;
+		};
+/* End PBXShellScriptBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		A10009010000000000000001 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A10000010000000000000001 /* AppDelegate.swift in Sources */,
+				A10000020000000000000001 /* DiagnosticsStore.swift in Sources */,
+				A10000030000000000000001 /* DiagnosticsView.swift in Sources */,
+				A10000040000000000000001 /* FamilyRulesAgentApp.swift in Sources */,
+				A10000050000000000000001 /* HelperXPCClient.swift in Sources */,
+				A10000060000000000000001 /* FamilyRulesHelperXPCProtocol.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A10009020000000000000001 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A10000070000000000000001 /* main.swift in Sources */,
+				A10000080000000000000001 /* FamilyRulesHelperXPCProtocol.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		A10012010000000000000001 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = A10005020000000000000001 /* FamilyRulesHelper */;
+			targetProxy = A10003010000000000000001 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		A10014010000000000000001 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = macosx;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_VERSION = 6.0;
+			};
+			name = Debug;
+		};
+		A10014020000000000000001 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_NO_COMMON_BLOCKS = YES;
+				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				SDKROOT = macosx;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_VERSION = 6.0;
+			};
+			name = Release;
+		};
+		A10014030000000000000001 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = Config/FamilyRulesAgent.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 8QMDCQHY5B;
+				ENABLE_HARDENED_RUNTIME = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = "Config/FamilyRulesAgent-Info.plist";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.familyrules.agent;
+				PRODUCT_NAME = FamilyRulesAgent;
+				PROVISIONING_PROFILE_SPECIFIER = "";
+				SKIP_INSTALL = NO;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+			};
+			name = Debug;
+		};
+		A10014040000000000000001 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = Config/FamilyRulesAgent.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 8QMDCQHY5B;
+				ENABLE_HARDENED_RUNTIME = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = "Config/FamilyRulesAgent-Info.plist";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.familyrules.agent;
+				PRODUCT_NAME = FamilyRulesAgent;
+				PROVISIONING_PROFILE_SPECIFIER = "";
+				SKIP_INSTALL = NO;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+			};
+			name = Release;
+		};
+		A10014050000000000000001 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = Config/FamilyRulesHelper.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 8QMDCQHY5B;
+				ENABLE_HARDENED_RUNTIME = NO;
+				EXECUTABLE_NAME = "$(PRODUCT_NAME)";
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = "Config/FamilyRulesHelper-Info.plist";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MACH_O_TYPE = mh_execute;
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.familyrules.agent.helper;
+				PRODUCT_NAME = FamilyRulesHelper;
+				PROVISIONING_PROFILE_SPECIFIER = "";
+				SKIP_INSTALL = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+			};
+			name = Debug;
+		};
+		A10014060000000000000001 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = Config/FamilyRulesHelper.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 8QMDCQHY5B;
+				ENABLE_HARDENED_RUNTIME = NO;
+				EXECUTABLE_NAME = "$(PRODUCT_NAME)";
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = "Config/FamilyRulesHelper-Info.plist";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MACH_O_TYPE = mh_execute;
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.familyrules.agent.helper;
+				PRODUCT_NAME = FamilyRulesHelper;
+				PROVISIONING_PROFILE_SPECIFIER = "";
+				SKIP_INSTALL = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		A10010010000000000000001 /* Build configuration list for PBXNativeTarget "FamilyRulesAgent" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A10014030000000000000001 /* Debug */,
+				A10014040000000000000001 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		A10010020000000000000001 /* Build configuration list for PBXNativeTarget "FamilyRulesHelper" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A10014050000000000000001 /* Debug */,
+				A10014060000000000000001 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		A10013010000000000000001 /* Build configuration list for PBXProject "FamilyRulesClient" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A10014010000000000000001 /* Debug */,
+				A10014020000000000000001 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = A10004010000000000000001 /* Project object */;
+}
