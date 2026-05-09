@@ -2,30 +2,57 @@ import AppKit
 import SwiftUI
 
 @MainActor
-final class AppDelegate: NSObject, NSApplicationDelegate {
-    let appModel = AppModel()
-    let diagnosticsStore = DiagnosticsStore()
+final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
+    let appModel: AppModel
+    let diagnosticsStore: DiagnosticsStore
+    let activityMonitor: ActivityMonitor
+    let syncController: SyncController
 
     private var statusItem: NSStatusItem?
     private var diagnosticsWindowController: NSWindowController?
     private var setupWindowController: NSWindowController?
+    private var syncStatusMenuItem: NSMenuItem?
+    private var foregroundAppMenuItem: NSMenuItem?
+
+    override init() {
+        let activityMonitor = ActivityMonitor()
+        self.appModel = AppModel()
+        self.diagnosticsStore = DiagnosticsStore()
+        self.activityMonitor = activityMonitor
+        self.syncController = SyncController(activityMonitor: activityMonitor)
+        super.init()
+    }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
+        activityMonitor.start()
         configureStatusItem()
 
-        if !appModel.isRegistered {
+        if let registration = appModel.registration {
+            Task {
+                await syncController.start(registration: registration)
+            }
+        } else {
             openSetupWindow()
         }
+    }
+
+    func menuWillOpen(_ menu: NSMenu) {
+        refreshMenuStatusItems()
     }
 
     @objc
     private func openDiagnosticsWindow() {
         if diagnosticsWindowController == nil {
-            let hostingController = NSHostingController(rootView: DiagnosticsView(store: diagnosticsStore, appModel: appModel))
+            let hostingController = NSHostingController(rootView: DiagnosticsView(
+                store: diagnosticsStore,
+                appModel: appModel,
+                activityMonitor: activityMonitor,
+                syncController: syncController
+            ))
             let window = NSWindow(contentViewController: hostingController)
             window.title = "FamilyRules Diagnostics"
-            window.setContentSize(NSSize(width: 620, height: 320))
+            window.setContentSize(NSSize(width: 700, height: 520))
             window.isReleasedWhenClosed = false
             diagnosticsWindowController = NSWindowController(window: window)
         }
@@ -61,6 +88,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func handleRegistrationCompleted() {
+        if let registration = appModel.registration {
+            Task {
+                await syncController.start(registration: registration)
+            }
+        }
+
         setupWindowController?.close()
         openDiagnosticsWindow()
     }
@@ -83,6 +116,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         let menu = NSMenu()
+        menu.delegate = self
+
+        let syncStatusMenuItem = NSMenuItem(title: "Sync: Idle", action: nil, keyEquivalent: "")
+        syncStatusMenuItem.isEnabled = false
+        menu.addItem(syncStatusMenuItem)
+        self.syncStatusMenuItem = syncStatusMenuItem
+
+        let foregroundAppMenuItem = NSMenuItem(title: "Foreground: None", action: nil, keyEquivalent: "")
+        foregroundAppMenuItem.isEnabled = false
+        menu.addItem(foregroundAppMenuItem)
+        self.foregroundAppMenuItem = foregroundAppMenuItem
+
+        menu.addItem(.separator())
 
         let openDiagnostics = NSMenuItem(title: "Open Diagnostics", action: #selector(openDiagnosticsWindow), keyEquivalent: "")
         openDiagnostics.target = self
@@ -104,5 +150,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 #endif
 
         item.menu = menu
+        refreshMenuStatusItems()
+    }
+
+    private func refreshMenuStatusItems() {
+        syncStatusMenuItem?.title = "Sync: \(syncController.syncStatus)"
+        foregroundAppMenuItem?.title = "Foreground: \(activityMonitor.frontmostApplicationName)"
     }
 }

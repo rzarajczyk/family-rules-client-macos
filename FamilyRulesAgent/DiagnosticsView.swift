@@ -3,41 +3,84 @@ import SwiftUI
 struct DiagnosticsView: View {
     @ObservedObject var store: DiagnosticsStore
     @ObservedObject var appModel: AppModel
+    @ObservedObject var activityMonitor: ActivityMonitor
+    @ObservedObject var syncController: SyncController
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text("FamilyRules")
-                .font(.title2.weight(.semibold))
-            LabeledContent("Menu Bar App", value: "Enabled")
-            LabeledContent("Registration", value: appModel.registration == nil ? "Not registered" : "Registered")
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                Text("FamilyRules")
+                    .font(.title2.weight(.semibold))
 
-            if let registration = appModel.registration {
-                LabeledContent("Server URL", value: registration.serverURL)
-                LabeledContent("Parent Username", value: registration.username)
-                LabeledContent("Instance Name", value: registration.instanceName)
-                LabeledContent("Instance ID", value: registration.instanceId)
-            }
+                LabeledContent("Menu Bar App", value: "Enabled")
+                LabeledContent("Registration", value: appModel.registration == nil ? "Not registered" : "Registered")
 
-            LabeledContent("Helper Reachability", value: store.helperConnectionState)
-            LabeledContent("Last Helper Reply", value: store.helperLastReply)
-            LabeledContent("Service Management", value: store.serviceManagementState)
-
-            if let startupErrorMessage = appModel.startupErrorMessage {
-                Text(startupErrorMessage)
-                    .foregroundStyle(.orange)
-            }
-
-            HStack {
-                Button("Ping Helper") {
-                    store.performPing()
+                if let registration = appModel.registration {
+                    LabeledContent("Server URL", value: registration.serverURL)
+                    LabeledContent("Parent Username", value: registration.username)
+                    LabeledContent("Instance Name", value: registration.instanceName)
+                    LabeledContent("Instance ID", value: registration.instanceId)
                 }
 
-                Button("Refresh") {
-                    store.refreshServiceManagementState()
+                Divider()
+
+                LabeledContent("Screen Awake", value: activityMonitor.isScreenAwake ? "Yes" : "No")
+                LabeledContent("Session Active", value: activityMonitor.isSessionActive ? "Yes" : "No")
+                LabeledContent("Foreground App", value: activityMonitor.frontmostApplicationName)
+                LabeledContent("Visible Apps", value: "\(activityMonitor.visibleAppCount)")
+
+                Divider()
+
+                LabeledContent("Sync Status", value: syncController.syncStatus)
+                LabeledContent("Last Client-Info", value: syncController.lastClientInfoDescription)
+                LabeledContent("Last Report", value: syncController.lastReportDescription)
+                LabeledContent("Last Device State", value: syncController.lastDeviceState)
+
+                if let syncErrorMessage = syncController.lastErrorMessage {
+                    Text(syncErrorMessage)
+                        .foregroundStyle(.red)
+                }
+
+                Divider()
+
+                LabeledContent("Helper Reachability", value: store.helperConnectionState)
+                LabeledContent("Last Helper Reply", value: store.helperLastReply)
+                LabeledContent("Service Management", value: store.serviceManagementState)
+
+                if let startupErrorMessage = appModel.startupErrorMessage {
+                    Text(startupErrorMessage)
+                        .foregroundStyle(.orange)
+                }
+
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Recent Sync Log")
+                        .font(.headline)
+
+                    if syncController.recentLogLines.isEmpty {
+                        Text("No sync activity yet")
+                            .foregroundStyle(.secondary)
+                    } else {
+                        ForEach(syncController.recentLogLines, id: \.self) { line in
+                            Text(line)
+                                .font(.system(.body, design: .monospaced))
+                                .textSelection(.enabled)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                    }
+                }
+
+                HStack {
+                    Button("Ping Helper") {
+                        store.performPing()
+                    }
+
+                    Button("Refresh") {
+                        store.refreshServiceManagementState()
+                    }
                 }
             }
+            .padding(20)
         }
-        .padding(20)
-        .frame(minWidth: 620, minHeight: 320)
+        .frame(minWidth: 700, minHeight: 520)
     }
 }

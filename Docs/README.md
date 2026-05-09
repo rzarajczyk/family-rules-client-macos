@@ -1,6 +1,6 @@
 # FamilyRules macOS Client
 
-This repository currently contains steps 1 and 2 from the implementation plan:
+This repository currently contains steps 1, 2, and part of step 3 from the implementation plan:
 
 - `FamilyRulesAgent`: a native macOS menu bar app
 - `FamilyRulesHelper`: an embedded XPC helper skeleton
@@ -8,6 +8,9 @@ This repository currently contains steps 1 and 2 from the implementation plan:
 - initial setup window
 - `POST /api/v2/register-instance` integration
 - secure persistence split across SQLite and Keychain
+- startup and periodic `client-info` sync
+- startup and periodic `/report` sync while active
+- foreground-app and screen/session activity tracking
 
 ## Project Layout
 
@@ -127,6 +130,14 @@ It shows:
 - saved username
 - saved instance name
 - saved instance ID
+- screen awake state
+- session active state
+- foreground app
+- sync status
+- last `client-info`
+- last `/report`
+- last server device state
+- recent sync log lines
 - helper reachability
 - last helper reply
 - service-management status
@@ -153,31 +164,39 @@ The current test suite covers:
 
 - `AppModel` registration loading and save behavior
 - `RegistrationClient` request construction and server status mapping
+- `UsageAccumulator` foreground/screen-time accounting
+- `ServerSyncClient` `client-info` and `report` request handling
+- `SyncController` startup sync and active/inactive report behavior
 
-## Manual Test For Step 2
+## Manual Test For Step 3
 
 1. Run the app from Xcode.
 2. Confirm the setup window appears automatically if the app is not registered yet.
 3. Complete registration with real server credentials.
 4. Confirm diagnostics shows `Registered` and the returned instance ID.
-5. Stop the app.
-6. Run it again.
-7. Confirm setup does not appear again.
-8. Open diagnostics and confirm the saved registration is still loaded.
+5. Keep the session unlocked with the screen awake for at least 30 seconds.
+6. Open diagnostics and confirm `Last Client-Info` and `Last Report` update.
+7. Confirm `Foreground App` changes when you switch apps.
+8. Confirm `Last Device State` reflects the server response from `/report`.
+9. Stop the app.
+10. Run it again.
+11. Confirm setup does not appear again.
+12. Open diagnostics and confirm the saved registration is still loaded.
 
-## What Step 2 Includes
+## What Step 3 Includes
 
 - initial setup UI
 - registration against `POST /api/v2/register-instance`
 - registration persistence in SQLite and Keychain
 - startup logic for registered vs unregistered state
 - diagnostics updated to show registration state
+- startup and 10-minute `client-info` scheduling
+- startup and 30-second `/report` scheduling while active
+- foreground-app tracking for report payloads
+- basic local sync logging and sync status in diagnostics/menu
 
-## What Step 2 Does Not Include Yet
+## What Is Still Not Included Yet
 
-- periodic `client-info`
-- periodic `/report`
-- app usage collection
 - start-at-login
 - watchdog relaunch
 - permissions flow
