@@ -31,21 +31,29 @@
    - End state: a working app with the full intended usage model, even though only foreground totals are uploaded.
    - Testable by: open multiple apps/windows, verify local visible-app totals and correct screen-time accounting.
 
-5. **Helper-backed lifecycle hardening**
+5. **Dashboard UI**
+   - Add a parent-facing dashboard window accessible from the menu bar.
+   - Present the live usage data already collected locally: screen time, foreground totals, visible-app totals, and current activity state.
+   - Surface registration and sync health in a more product-facing layout than diagnostics.
+   - Keep the first dashboard iteration read-only and based on current in-memory data; historical trends and server-backed views stay for later phases.
+   - End state: a usable dashboard window that gives a clear overview of the device without relying on diagnostics.
+   - Testable by: open the dashboard, verify live values update while switching apps, and confirm it stays consistent with diagnostics.
+
+6. **Helper-backed lifecycle hardening**
    - Add agent relaunch/watchdog behavior.
    - Add start-at-login and recovery after agent kill.
    - Implement `ADMIN_DISABLED` handling at the lifecycle level, including helper-side reactivation polling.
    - End state: a working app that survives casual termination and can enter/exit admin-disabled mode safely.
    - Testable by: kill agent, verify relaunch; force `ADMIN_DISABLED`, verify enforcement pauses and helper can reactivate.
 
-6. **State engine + lock/logout flows**
+7. **State engine + lock/logout flows**
    - Implement unified state handling for `ACTIVE`, `LOCK_SCREEN`, `LOCK_SCREEN_WITH_TIMEOUT`, `LOGOUT`, `LOGOUT_WITH_TIMEOUT`, and legacy mappings.
    - Add countdown UI and helper-executed lock/logout actions.
    - Keep blocked-app mode out of this step.
    - End state: a working app that fully reacts to non-app-blocking server states.
    - Testable by: simulate each state locally or from server, verify countdowns, lock, logout, and recovery.
 
-7. **Restricted app blocking**
+8. **Restricted app blocking**
    - Implement blocked-app fetch/cache and state arming.
    - Add overlay windows, Android-derived branding, and the `Minimize all windows` action.
    - Apply the persistence rule: overlay stays while blocked app is still running with visible windows.
@@ -53,25 +61,25 @@
    - End state: a working parental-control app with actual restricted-app enforcement.
    - Testable by: mark an app blocked, launch/focus it, verify overlay behavior, minimize flow, and fallback termination.
 
-8. **Commands + diagnostics**
+9. **Commands + diagnostics**
    - Implement command persistence, ack/result flow, and `SEND_LOGS`.
    - Add local log viewer and packaging of logs for upload.
-   - End state: a working app that matches Android’s server command behavior.
+   - End state: a working app that matches Android's server command behavior.
    - Testable by: inject a `SEND_LOGS` command, verify ack, result upload, and retry behavior after restart.
 
-9. **All My Devices + install/uninstall polish**
-   - Build the `All My Devices` UI from `groups-usage-report`.
-   - Finalize installer behavior, explicit uninstall path, `unregister-instance`, and Keychain cleanup.
-   - Do final packaging/notarization work and multi-user smoke tests.
-   - End state: a full working product matching the spec closely enough for end-to-end validation.
-   - Testable by: install from package, complete setup, use app normally, uninstall cleanly, verify server deregistration.
+10. **All My Devices + install/uninstall polish**
+    - Build the `All My Devices` UI from `groups-usage-report`.
+    - Finalize installer behavior, explicit uninstall path, `unregister-instance`, and Keychain cleanup.
+    - Do final packaging/notarization work and multi-user smoke tests.
+    - End state: a full working product matching the spec closely enough for end-to-end validation.
+    - Testable by: install from package, complete setup, use app normally, uninstall cleanly, verify server deregistration.
 
 ## Recommended Cut Points
 
 - First useful demo: Step 3
-- First resilient background app: Step 5
-- First real parental-control milestone: Step 7
-- First release candidate: Step 9
+- First resilient background app: Step 6
+- First real parental-control milestone: Step 8
+- First release candidate: Step 10
 
 ## Why This Split Works
 

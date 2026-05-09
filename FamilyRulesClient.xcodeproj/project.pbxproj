@@ -28,6 +28,14 @@
 		A10000190000000000000003 /* UsageAccumulatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001180000000000000003 /* UsageAccumulatorTests.swift */; };
 		A10000200000000000000003 /* ServerSyncClientTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001190000000000000003 /* ServerSyncClientTests.swift */; };
 		A10000210000000000000003 /* SyncControllerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001200000000000000003 /* SyncControllerTests.swift */; };
+		A10000220000000000000004 /* DashboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001230000000000000004 /* DashboardView.swift */; };
+		A10000230000000000000005 /* LifecycleController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001240000000000000005 /* LifecycleController.swift */; };
+		A10000240000000000000005 /* LifecycleControllerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001250000000000000005 /* LifecycleControllerTests.swift */; };
+		A10000250000000000000006 /* DeviceStateController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001260000000000000006 /* DeviceStateController.swift */; };
+		A10000260000000000000006 /* StateOverlayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001270000000000000006 /* StateOverlayView.swift */; };
+		A10000270000000000000006 /* DeviceStateControllerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001280000000000000006 /* DeviceStateControllerTests.swift */; };
+		A10000280000000000000007 /* AllDevicesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001290000000000000007 /* AllDevicesView.swift */; };
+		A10000290000000000000007 /* AllDevicesModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001300000000000000007 /* AllDevicesModelTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -73,6 +81,14 @@
 		A10001200000000000000003 /* SyncControllerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncControllerTests.swift; sourceTree = "<group>"; };
 		A10001210000000000000004 /* README.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = README.md; sourceTree = "<group>"; };
 		A10001220000000000000004 /* PLAN.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = PLAN.md; sourceTree = "<group>"; };
+		A10001230000000000000004 /* DashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardView.swift; sourceTree = "<group>"; };
+		A10001240000000000000005 /* LifecycleController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LifecycleController.swift; sourceTree = "<group>"; };
+		A10001250000000000000005 /* LifecycleControllerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LifecycleControllerTests.swift; sourceTree = "<group>"; };
+		A10001260000000000000006 /* DeviceStateController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceStateController.swift; sourceTree = "<group>"; };
+		A10001270000000000000006 /* StateOverlayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StateOverlayView.swift; sourceTree = "<group>"; };
+		A10001280000000000000006 /* DeviceStateControllerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceStateControllerTests.swift; sourceTree = "<group>"; };
+		A10001290000000000000007 /* AllDevicesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AllDevicesView.swift; sourceTree = "<group>"; };
+		A10001300000000000000007 /* AllDevicesModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AllDevicesModelTests.swift; sourceTree = "<group>"; };
 		A10002010000000000000001 /* FamilyRulesAgent.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = FamilyRulesAgent.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		A10002020000000000000001 /* FamilyRulesHelper.xpc */ = {isa = PBXFileReference; explicitFileType = "wrapper.xpc-service"; includeInIndex = 0; path = FamilyRulesHelper.xpc; sourceTree = BUILT_PRODUCTS_DIR; };
 		A10002030000000000000002 /* FamilyRulesAgentTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = FamilyRulesAgentTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -121,16 +137,21 @@
 			isa = PBXGroup;
 			children = (
 				A10001150000000000000003 /* ActivityMonitor.swift */,
+				A10001290000000000000007 /* AllDevicesView.swift */,
 				A10001090000000000000002 /* AppModel.swift */,
 				A10001010000000000000001 /* AppDelegate.swift */,
+				A10001230000000000000004 /* DashboardView.swift */,
+				A10001260000000000000006 /* DeviceStateController.swift */,
 				A10001020000000000000001 /* DiagnosticsStore.swift */,
 				A10001030000000000000001 /* DiagnosticsView.swift */,
 				A10001040000000000000001 /* FamilyRulesAgentApp.swift */,
 				A10001050000000000000001 /* HelperXPCClient.swift */,
+				A10001240000000000000005 /* LifecycleController.swift */,
 				A10001100000000000000002 /* RegistrationClient.swift */,
 				A10001110000000000000002 /* RegistrationStore.swift */,
 				A10001160000000000000003 /* ServerSyncClient.swift */,
 				A10001120000000000000002 /* SetupView.swift */,
+				A10001270000000000000006 /* StateOverlayView.swift */,
 				A10001170000000000000003 /* SyncController.swift */,
 			);
 			path = FamilyRulesAgent;
@@ -176,7 +197,10 @@
 		A10008070000000000000002 /* FamilyRulesAgentTests */ = {
 			isa = PBXGroup;
 			children = (
+				A10001300000000000000007 /* AllDevicesModelTests.swift */,
 				A10001130000000000000002 /* AppModelTests.swift */,
+				A10001280000000000000006 /* DeviceStateControllerTests.swift */,
+				A10001250000000000000005 /* LifecycleControllerTests.swift */,
 				A10001140000000000000002 /* RegistrationClientTests.swift */,
 				A10001190000000000000003 /* ServerSyncClientTests.swift */,
 				A10001200000000000000003 /* SyncControllerTests.swift */,
@@ -343,17 +367,22 @@
 			buildActionMask = 2147483647;
 			files = (
 				A10000160000000000000003 /* ActivityMonitor.swift in Sources */,
+				A10000280000000000000007 /* AllDevicesView.swift in Sources */,
 				A10000090000000000000002 /* AppModel.swift in Sources */,
 				A10000010000000000000001 /* AppDelegate.swift in Sources */,
+				A10000220000000000000004 /* DashboardView.swift in Sources */,
+				A10000250000000000000006 /* DeviceStateController.swift in Sources */,
 				A10000020000000000000001 /* DiagnosticsStore.swift in Sources */,
 				A10000030000000000000001 /* DiagnosticsView.swift in Sources */,
 				A10000040000000000000001 /* FamilyRulesAgentApp.swift in Sources */,
 				A10000050000000000000001 /* HelperXPCClient.swift in Sources */,
+				A10000230000000000000005 /* LifecycleController.swift in Sources */,
 				A10000060000000000000001 /* FamilyRulesHelperXPCProtocol.swift in Sources */,
 				A10000100000000000000002 /* RegistrationClient.swift in Sources */,
 				A10000110000000000000002 /* RegistrationStore.swift in Sources */,
 				A10000170000000000000003 /* ServerSyncClient.swift in Sources */,
 				A10000120000000000000002 /* SetupView.swift in Sources */,
+				A10000260000000000000006 /* StateOverlayView.swift in Sources */,
 				A10000180000000000000003 /* SyncController.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -371,7 +400,10 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				A10000290000000000000007 /* AllDevicesModelTests.swift in Sources */,
 				A10000130000000000000002 /* AppModelTests.swift in Sources */,
+				A10000270000000000000006 /* DeviceStateControllerTests.swift in Sources */,
+				A10000240000000000000005 /* LifecycleControllerTests.swift in Sources */,
 				A10000140000000000000002 /* RegistrationClientTests.swift in Sources */,
 				A10000200000000000000003 /* ServerSyncClientTests.swift in Sources */,
 				A10000210000000000000003 /* SyncControllerTests.swift in Sources */,

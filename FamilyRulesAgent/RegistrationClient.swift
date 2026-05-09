@@ -7,6 +7,8 @@ protocol RegistrationClientProtocol: Actor {
         password: String,
         instanceName: String
     ) async throws -> RegistrationResult
+    func unregister(registration: RegistrationRecord) async throws
+    func fetchGroupsUsageReport(registration: RegistrationRecord) async throws -> GroupsUsageReportPayload
 }
 
 actor RegistrationClient {
@@ -38,7 +40,7 @@ actor RegistrationClient {
             throw RegistrationClientError.invalidServerResponse
         }
 
-        guard httpResponse.statusCode == 200 else {
+        guard (200..<300).contains(httpResponse.statusCode) else {
             throw RegistrationClientError.requestFailed(statusCode: httpResponse.statusCode)
         }
 
@@ -64,6 +66,43 @@ actor RegistrationClient {
         }
     }
 
+    func unregister(registration: RegistrationRecord) async throws {
+        let endpoint = try endpointURL(serverURL: registration.serverURL, path: "unregister-instance")
+        var request = authorizedRequest(url: endpoint, username: registration.instanceId, password: registration.instanceToken)
+        request.httpBody = try encoder.encode(EmptyRequestBody())
+
+        let (data, response) = try await session.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw RegistrationClientError.invalidServerResponse
+        }
+
+        guard (200..<300).contains(httpResponse.statusCode) else {
+            throw RegistrationClientError.requestFailed(statusCode: httpResponse.statusCode)
+        }
+
+        let payload = try decoder.decode(StatusResponse.self, from: data)
+        guard payload.status == "SUCCESS" else {
+            throw RegistrationClientError.requestFailed(statusCode: httpResponse.statusCode)
+        }
+    }
+
+    func fetchGroupsUsageReport(registration: RegistrationRecord) async throws -> GroupsUsageReportPayload {
+        let endpoint = try endpointURL(serverURL: registration.serverURL, path: "groups-usage-report")
+        var request = authorizedRequest(url: endpoint, username: registration.instanceId, password: registration.instanceToken)
+        request.httpBody = try encoder.encode(EmptyRequestBody())
+
+        let (data, response) = try await session.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw RegistrationClientError.invalidServerResponse
+        }
+
+        guard (200..<300).contains(httpResponse.statusCode) else {
+            throw RegistrationClientError.requestFailed(statusCode: httpResponse.statusCode)
+        }
+
+        return try decoder.decode(GroupsUsageReportPayload.self, from: data)
+    }
+
     private func normalizeServerURL(_ rawValue: String) throws -> String {
         let trimmed = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else {
@@ -71,7 +110,8 @@ actor RegistrationClient {
         }
 
         let normalized = trimmed.hasSuffix("/") ? String(trimmed.dropLast()) : trimmed
-        guard URL(string: normalized)?.scheme != nil else {
+        guard let scheme = URL(string: normalized)?.scheme,
+              scheme == "http" || scheme == "https" else {
             throw RegistrationClientError.invalidServerURL
         }
 
@@ -79,11 +119,26 @@ actor RegistrationClient {
     }
 
     private func registerURL(from serverURL: String) throws -> URL {
+        try endpointURL(serverURL: serverURL, path: "register-instance")
+    }
+
+    private func endpointURL(serverURL: String, path: String) throws -> URL {
         guard let baseURL = URL(string: serverURL) else {
             throw RegistrationClientError.invalidServerURL
         }
 
-        return baseURL.appending(path: "api").appending(path: "v2").appending(path: "register-instance")
+        return baseURL
+            .appendingPathComponent("api")
+            .appendingPathComponent("v2")
+            .appendingPathComponent(path)
+    }
+
+    private func authorizedRequest(url: URL, username: String, password: String) -> URLRequest {
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue(basicAuthorization(username: username, password: password), forHTTPHeaderField: "Authorization")
+        return request
     }
 
     private func basicAuthorization(username: String, password: String) -> String {
@@ -101,9 +156,94 @@ struct RegistrationResult {
     let instanceToken: String
 }
 
+struct GroupsUsageReportPayload: Decodable, Equatable {
+    let groups: [DeviceUsageGroupPayload]
+}
+
+struct DeviceUsageGroupPayload: Decodable, Equatable {
+    let groupName: String
+    let totalSeconds: Int
+    let applications: [DeviceUsageApplicationPayload]
+
+    private enum CodingKeys: String, CodingKey {
+        case groupName
+        case totalSeconds
+        case totalTimeSeconds
+        case applications
+        case memberApps
+        case apps
+    }
+
+    init(groupName: String, totalSeconds: Int, applications: [DeviceUsageApplicationPayload]) {
+        self.groupName = groupName
+        self.totalSeconds = totalSeconds
+        self.applications = applications
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        groupName = try container.decodeIfPresent(String.self, forKey: .groupName) ?? "Unnamed Group"
+        totalSeconds = try container.decodeIfPresent(Int.self, forKey: .totalSeconds)
+            ?? container.decodeIfPresent(Int.self, forKey: .totalTimeSeconds)
+            ?? 0
+        applications = try container.decodeIfPresent([DeviceUsageApplicationPayload].self, forKey: .applications)
+            ?? container.decodeIfPresent([DeviceUsageApplicationPayload].self, forKey: .memberApps)
+            ?? container.decodeIfPresent([DeviceUsageApplicationPayload].self, forKey: .apps)
+            ?? []
+    }
+}
+
+struct DeviceUsageApplicationPayload: Decodable, Equatable {
+    let appName: String
+    let deviceName: String
+    let durationSeconds: Int
+    let iconBase64Png: String?
+
+    private enum CodingKeys: String, CodingKey {
+        case appName
+        case name
+        case deviceName
+        case instanceName
+        case durationSeconds
+        case duration
+        case usageDurationSeconds
+        case iconBase64Png
+        case icon
+    }
+
+    init(appName: String, deviceName: String, durationSeconds: Int, iconBase64Png: String?) {
+        self.appName = appName
+        self.deviceName = deviceName
+        self.durationSeconds = durationSeconds
+        self.iconBase64Png = iconBase64Png
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        appName = try container.decodeIfPresent(String.self, forKey: .appName)
+            ?? container.decodeIfPresent(String.self, forKey: .name)
+            ?? "Unknown App"
+        deviceName = try container.decodeIfPresent(String.self, forKey: .deviceName)
+            ?? container.decodeIfPresent(String.self, forKey: .instanceName)
+            ?? "Unknown Device"
+        durationSeconds = try container.decodeIfPresent(Int.self, forKey: .durationSeconds)
+            ?? container.decodeIfPresent(Int.self, forKey: .duration)
+            ?? container.decodeIfPresent(Int.self, forKey: .usageDurationSeconds)
+            ?? 0
+        iconBase64Png = try container.decodeIfPresent(String.self, forKey: .iconBase64Png)
+            ?? container.decodeIfPresent(String.self, forKey: .icon)
+    }
+}
+
 private struct RegisterInstanceRequest: Encodable {
     let instanceName: String
     let clientType: String
+}
+
+private struct EmptyRequestBody: Encodable {}
+
+private struct StatusResponse: Decodable {
+    let status: String
 }
 
 private struct RegisterInstanceResponse: Decodable {

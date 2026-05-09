@@ -91,6 +91,74 @@ final class ServerSyncClientTests: XCTestCase {
         XCTAssertTrue(response.serverCommands.isEmpty)
     }
 
+    func testSendCommandAcksUsesExpectedEndpointAndBody() async throws {
+        let client = ServerSyncClient(session: makeSession())
+
+        ServerSyncMockURLProtocol.handler = { request in
+            XCTAssertEqual(request.url?.absoluteString, "https://example.com/api/v2/command-acks")
+            XCTAssertEqual(request.value(forHTTPHeaderField: "Authorization"), "Basic aW5zdGFuY2UtMTp0b2tlbi0x")
+
+            let body = try readBody(from: request)
+            let payload = try JSONDecoder().decode(CommandAcksUploadPayload.self, from: Data(body.utf8))
+            XCTAssertEqual(payload.commandAcks.count, 1)
+            XCTAssertEqual(payload.commandAcks.first?.commandId, "cmd-1")
+            XCTAssertEqual(payload.commandAcks.first?.commandName, "SEND_LOGS")
+
+            let response = HTTPURLResponse(url: try XCTUnwrap(request.url), statusCode: 200, httpVersion: nil, headerFields: nil)!
+            return (response, Data(#"{"status":"ok"}"#.utf8))
+        }
+
+        try await client.sendCommandAcks(
+            CommandAcksUploadPayload(
+                commandAcks: [
+                    CommandAckUploadEntryPayload(
+                        commandId: "cmd-1",
+                        commandName: "SEND_LOGS",
+                        protocolVersion: 1,
+                        acknowledgedAt: "2026-05-09T10:00:00Z"
+                    ),
+                ]
+            ),
+            registration: registration
+        )
+    }
+
+    func testSendCommandResultsUsesExpectedEndpointAndBody() async throws {
+        let client = ServerSyncClient(session: makeSession())
+
+        ServerSyncMockURLProtocol.handler = { request in
+            XCTAssertEqual(request.url?.absoluteString, "https://example.com/api/v2/command-results")
+            XCTAssertEqual(request.value(forHTTPHeaderField: "Authorization"), "Basic aW5zdGFuY2UtMTp0b2tlbi0x")
+
+            let body = try readBody(from: request)
+            let payload = try JSONDecoder().decode(CommandResultsUploadPayload.self, from: Data(body.utf8))
+            XCTAssertEqual(payload.commandResults.count, 1)
+            XCTAssertEqual(payload.commandResults.first?.commandId, "cmd-1")
+            XCTAssertEqual(payload.commandResults.first?.status, "COMPLETED")
+            XCTAssertEqual(payload.commandResults.first?.details["lineCount"], "2")
+
+            let response = HTTPURLResponse(url: try XCTUnwrap(request.url), statusCode: 200, httpVersion: nil, headerFields: nil)!
+            return (response, Data(#"{"status":"ok"}"#.utf8))
+        }
+
+        try await client.sendCommandResults(
+            CommandResultsUploadPayload(
+                commandResults: [
+                    CommandResultUploadEntryPayload(
+                        commandId: "cmd-1",
+                        commandName: "SEND_LOGS",
+                        protocolVersion: 1,
+                        completedAt: "2026-05-09T10:01:00Z",
+                        status: "COMPLETED",
+                        message: "Uploaded logs.",
+                        details: ["lineCount": "2", "logs": "line 1\nline 2"]
+                    ),
+                ]
+            ),
+            registration: registration
+        )
+    }
+
     private func makeSession() -> URLSession {
         let configuration = URLSessionConfiguration.ephemeral
         configuration.protocolClasses = [ServerSyncMockURLProtocol.self]

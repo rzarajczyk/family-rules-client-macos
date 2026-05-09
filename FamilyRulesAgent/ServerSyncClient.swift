@@ -3,6 +3,9 @@ import Foundation
 protocol ServerSyncClientProtocol: Actor {
     func sendClientInfo(_ payload: ClientInfoPayload, registration: RegistrationRecord) async throws
     func sendReport(_ payload: ReportPayload, registration: RegistrationRecord) async throws -> ReportResponsePayload
+    func fetchBlockedApps(registration: RegistrationRecord) async throws -> [BlockedAppPayload]
+    func sendCommandAcks(_ payload: CommandAcksUploadPayload, registration: RegistrationRecord) async throws
+    func sendCommandResults(_ payload: CommandResultsUploadPayload, registration: RegistrationRecord) async throws
 }
 
 actor ServerSyncClient {
@@ -40,6 +43,48 @@ actor ServerSyncClient {
         }
 
         return try decoder.decode(ReportResponsePayload.self, from: data)
+    }
+
+    func fetchBlockedApps(registration: RegistrationRecord) async throws -> [BlockedAppPayload] {
+        let endpoint = try endpointURL(serverURL: registration.serverURL, path: "get-blocked-apps")
+        var request = authorizedRequest(url: endpoint, registration: registration)
+        request.httpBody = try encoder.encode(EmptyRequestBody())
+
+        let (data, response) = try await session.data(for: request)
+        let httpResponse = try validate(response: response)
+        guard httpResponse.statusCode == 200 else {
+            throw ServerSyncClientError.requestFailed(statusCode: httpResponse.statusCode)
+        }
+
+        return try decoder.decode(BlockedAppsResponsePayload.self, from: data).applications
+    }
+
+    func sendCommandAcks(_ payload: CommandAcksUploadPayload, registration: RegistrationRecord) async throws {
+        let endpoint = try endpointURL(serverURL: registration.serverURL, path: "command-acks")
+        var request = authorizedRequest(url: endpoint, registration: registration)
+        request.httpBody = try encoder.encode(payload)
+
+        let (data, response) = try await session.data(for: request)
+        let httpResponse = try validate(response: response)
+        guard httpResponse.statusCode == 200 else {
+            throw ServerSyncClientError.requestFailed(statusCode: httpResponse.statusCode)
+        }
+
+        _ = try decoder.decode(StatusResponsePayload.self, from: data)
+    }
+
+    func sendCommandResults(_ payload: CommandResultsUploadPayload, registration: RegistrationRecord) async throws {
+        let endpoint = try endpointURL(serverURL: registration.serverURL, path: "command-results")
+        var request = authorizedRequest(url: endpoint, registration: registration)
+        request.httpBody = try encoder.encode(payload)
+
+        let (data, response) = try await session.data(for: request)
+        let httpResponse = try validate(response: response)
+        guard httpResponse.statusCode == 200 else {
+            throw ServerSyncClientError.requestFailed(statusCode: httpResponse.statusCode)
+        }
+
+        _ = try decoder.decode(StatusResponsePayload.self, from: data)
     }
 
     private func authorizedRequest(url: URL, registration: RegistrationRecord) -> URLRequest {
@@ -109,10 +154,25 @@ private struct ClientInfoResponsePayload: Decodable {
     let status: String
 }
 
+private struct StatusResponsePayload: Decodable {
+    let status: String
+}
+
 struct ReportResponsePayload: Decodable, Equatable {
     let deviceState: String
     let extra: String?
     let serverCommands: [ServerCommandPayload]
+}
+
+struct BlockedAppPayload: Decodable, Equatable {
+    let appPath: String
+    let appName: String?
+}
+
+private struct EmptyRequestBody: Encodable {}
+
+private struct BlockedAppsResponsePayload: Decodable {
+    let applications: [BlockedAppPayload]
 }
 
 struct ServerCommandPayload: Decodable, Equatable {
@@ -120,6 +180,31 @@ struct ServerCommandPayload: Decodable, Equatable {
     let commandName: String
     let issuedAt: String
     let protocolVersion: Int
+}
+
+struct CommandAcksUploadPayload: Codable, Equatable {
+    let commandAcks: [CommandAckUploadEntryPayload]
+}
+
+struct CommandAckUploadEntryPayload: Codable, Equatable {
+    let commandId: String
+    let commandName: String
+    let protocolVersion: Int
+    let acknowledgedAt: String
+}
+
+struct CommandResultsUploadPayload: Codable, Equatable {
+    let commandResults: [CommandResultUploadEntryPayload]
+}
+
+struct CommandResultUploadEntryPayload: Codable, Equatable {
+    let commandId: String
+    let commandName: String
+    let protocolVersion: Int
+    let completedAt: String
+    let status: String
+    let message: String
+    let details: [String: String]
 }
 
 enum ServerSyncClientError: LocalizedError, Equatable {

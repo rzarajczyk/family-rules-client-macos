@@ -5,6 +5,7 @@ import SQLite3
 protocol RegistrationStoreProtocol {
     func loadRegistration() throws -> RegistrationRecord?
     func saveRegistration(_ registration: RegistrationRecord) throws
+    func clearRegistration() throws
 }
 
 struct RegistrationRecord {
@@ -18,10 +19,12 @@ struct RegistrationRecord {
 final class RegistrationStore {
     private let database: SettingsDatabase
     private let keychain: TokenKeychainStore
+    private let fileManager: FileManager
 
-    init() {
-        database = SettingsDatabase()
-        keychain = TokenKeychainStore()
+    init(fileManager: FileManager = .default) {
+        self.database = SettingsDatabase(fileManager: fileManager)
+        self.keychain = TokenKeychainStore()
+        self.fileManager = fileManager
     }
 
     func loadRegistration() throws -> RegistrationRecord? {
@@ -69,6 +72,52 @@ final class RegistrationStore {
             throw error
         }
     }
+
+    func clearRegistration() throws {
+        var failures: [String] = []
+
+        do {
+            try keychain.deleteInstanceToken()
+        } catch {
+            failures.append(error.localizedDescription)
+        }
+
+        // For each SQLite database, also delete the WAL and SHM sidecar files that
+        // SQLite creates when using write-ahead logging mode.
+        let databaseURLs: [URL] = [
+            AgentPersistencePaths.settingsDatabaseURL,
+            AgentPersistencePaths.commandQueueDatabaseURL,
+        ]
+        var filesToDelete: [URL] = [AgentPersistencePaths.diagnosticsLogURL]
+        for dbURL in databaseURLs {
+            filesToDelete.append(dbURL)
+            filesToDelete.append(URL(fileURLWithPath: dbURL.path(percentEncoded: false) + "-wal"))
+            filesToDelete.append(URL(fileURLWithPath: dbURL.path(percentEncoded: false) + "-shm"))
+        }
+
+        for url in filesToDelete {
+            do {
+                if fileManager.fileExists(atPath: url.path(percentEncoded: false)) {
+                    try fileManager.removeItem(at: url)
+                }
+            } catch {
+                failures.append(error.localizedDescription)
+            }
+        }
+
+        do {
+            let appSupport = AgentPersistencePaths.applicationSupportDirectory
+            if fileManager.fileExists(atPath: appSupport.path(percentEncoded: false)) {
+                try fileManager.removeItem(at: appSupport)
+            }
+        } catch {
+            failures.append(error.localizedDescription)
+        }
+
+        if !failures.isEmpty {
+            throw RegistrationStoreError.cleanupFailed(details: failures.joined(separator: "\n"))
+        }
+    }
 }
 
 extension RegistrationStore: RegistrationStoreProtocol {}
@@ -80,29 +129,13 @@ private enum StoredSetting: String, CaseIterable {
     case instanceName = "instance_name"
 }
 
-private enum PersistencePaths {
-    static var applicationSupportDirectory: URL {
-        let fileManager = FileManager.default
-        let root = (try? fileManager.url(
-            for: .applicationSupportDirectory,
-            in: .userDomainMask,
-            appropriateFor: nil,
-            create: true
-        )) ?? URL(fileURLWithPath: NSHomeDirectory()).appending(path: "Library/Application Support")
-
-        return root.appendingPathComponent("FamilyRulesAgent", isDirectory: true)
-    }
-
-    static var databaseURL: URL {
-        applicationSupportDirectory.appending(path: "FamilyRules.sqlite3")
-    }
-}
-
 private final class SettingsDatabase {
     private let databaseURL: URL
+    private let fileManager: FileManager
 
-    init(databaseURL: URL = PersistencePaths.databaseURL) {
+    init(databaseURL: URL = AgentPersistencePaths.settingsDatabaseURL, fileManager: FileManager = .default) {
         self.databaseURL = databaseURL
+        self.fileManager = fileManager
     }
 
     func loadAllSettings() throws -> [StoredSetting: String] {
@@ -174,13 +207,13 @@ private final class SettingsDatabase {
     }
 
     private func withDatabase<T>(_ body: (OpaquePointer) throws -> T) throws -> T {
-        try FileManager.default.createDirectory(
-            at: PersistencePaths.applicationSupportDirectory,
+        try fileManager.createDirectory(
+            at: AgentPersistencePaths.applicationSupportDirectory,
             withIntermediateDirectories: true
         )
 
         var database: OpaquePointer?
-        guard sqlite3_open_v2(databaseURL.path, &database, SQLITE_OPEN_CREATE | SQLITE_OPEN_READWRITE | SQLITE_OPEN_FULLMUTEX, nil) == SQLITE_OK,
+        guard sqlite3_open_v2(databaseURL.path(percentEncoded: false), &database, SQLITE_OPEN_CREATE | SQLITE_OPEN_READWRITE | SQLITE_OPEN_FULLMUTEX, nil) == SQLITE_OK,
               let database else {
             throw DatabaseError.openFailed(message: database?.errorMessage ?? "Unknown SQLite open error")
         }
@@ -193,7 +226,7 @@ private final class SettingsDatabase {
     }
 }
 
-private final class TokenKeychainStore {
+final class TokenKeychainStore {
     private let service = "com.familyrules.agent.registration"
     private let account = "instanceToken"
 
@@ -257,6 +290,17 @@ private final class TokenKeychainStore {
             kSecAttrService as String: service,
             kSecAttrAccount as String: account,
         ]
+    }
+}
+
+private enum RegistrationStoreError: LocalizedError {
+    case cleanupFailed(details: String)
+
+    var errorDescription: String? {
+        switch self {
+        case let .cleanupFailed(details):
+            return "Failed to fully clean local registration state:\n\(details)"
+        }
     }
 }
 

@@ -4,6 +4,7 @@ struct DiagnosticsView: View {
     @ObservedObject var store: DiagnosticsStore
     @ObservedObject var appModel: AppModel
     @ObservedObject var activityMonitor: ActivityMonitor
+    @ObservedObject var lifecycleController: LifecycleController
     @ObservedObject var syncController: SyncController
 
     var body: some View {
@@ -35,9 +36,19 @@ struct DiagnosticsView: View {
                 LabeledContent("Last Client-Info", value: syncController.lastClientInfoDescription)
                 LabeledContent("Last Report", value: syncController.lastReportDescription)
                 LabeledContent("Last Device State", value: syncController.lastDeviceState)
+                LabeledContent("Pending Commands", value: "\(syncController.pendingCommandCount)")
+                LabeledContent("Last Command", value: syncController.lastCommandDescription)
+                if let countdown = lifecycleController.countdownPresentation {
+                    LabeledContent("Countdown", value: "\(countdown.title): \(countdown.secondsRemaining)s")
+                }
 
                 if let syncErrorMessage = syncController.lastErrorMessage {
                     Text(syncErrorMessage)
+                        .foregroundStyle(.red)
+                }
+
+                if let commandErrorMessage = syncController.lastCommandErrorMessage {
+                    Text(commandErrorMessage)
                         .foregroundStyle(.red)
                 }
 
@@ -46,6 +57,9 @@ struct DiagnosticsView: View {
                 LabeledContent("Helper Reachability", value: store.helperConnectionState)
                 LabeledContent("Last Helper Reply", value: store.helperLastReply)
                 LabeledContent("Service Management", value: store.serviceManagementState)
+                LabeledContent("Lifecycle", value: lifecycleController.statusDescription)
+                LabeledContent("Login Item", value: lifecycleController.loginItemStatusDescription)
+                LabeledContent("Helper Lifecycle", value: lifecycleController.helperStatusDescription)
 
                 if let startupErrorMessage = appModel.startupErrorMessage {
                     Text(startupErrorMessage)
@@ -60,7 +74,9 @@ struct DiagnosticsView: View {
                         Text("No sync activity yet")
                             .foregroundStyle(.secondary)
                     } else {
-                        ForEach(syncController.recentLogLines, id: \.self) { line in
+                        // Use enumerated offset as identity so identical log lines are
+                        // each rendered as distinct rows rather than being de-duplicated by SwiftUI.
+                        ForEach(Array(syncController.recentLogLines.enumerated()), id: \.offset) { _, line in
                             Text(line)
                                 .font(.system(.body, design: .monospaced))
                                 .textSelection(.enabled)

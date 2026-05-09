@@ -119,6 +119,34 @@ The token is stored in Keychain under:
 - service: `com.familyrules.agent.registration`
 - account: `instanceToken`
 
+## Dashboard Window
+
+Open it from the menu bar with `Open Dashboard`.
+
+It shows:
+
+- live screen time for the current day
+- current foreground app
+- current visible app count
+- foreground usage breakdown by app
+- visible-app usage breakdown by app
+- registration state
+- sync status and last report/client-info activity
+
+## All My Devices Window
+
+Open it from the menu bar with `Open All My Devices`.
+
+It shows server-backed usage groups from `POST /api/v2/groups-usage-report`:
+
+- group name
+- total time per group
+- member apps across devices
+- per-app device name
+- per-app usage duration
+
+Use `Refresh` to reload the latest group usage snapshot from the server.
+
 ## Diagnostics Window
 
 Open it from the menu bar with `Open Diagnostics`.
@@ -144,6 +172,21 @@ It shows:
 
 You can also use `Open Setup` from the menu if you want to bring the setup window back manually.
 
+## Unregister This Mac
+
+The menu bar includes an explicit `Unregister This Mac` action for admin cleanup.
+
+It will:
+
+- call `POST /api/v2/unregister-instance`
+- remove the saved token from Keychain
+- delete the local SQLite settings database
+- delete the local command queue database
+- delete the local diagnostics log
+- unregister the app login item when available
+
+If the server unregister request fails, the app still proceeds with local cleanup and reports that failure in the completion dialog.
+
 ## Command-Line Build
 
 You can build from Terminal with:
@@ -163,27 +206,32 @@ xcodebuild -project FamilyRulesClient.xcodeproj -scheme FamilyRulesAgent -config
 The current test suite covers:
 
 - `AppModel` registration loading and save behavior
-- `RegistrationClient` request construction and server status mapping
+- `RegistrationClient` request construction, unregister, and groups-usage-report decoding
+- `AllDevicesModel` server-backed group loading and error handling
 - `UsageAccumulator` foreground/screen-time accounting
 - `ServerSyncClient` `client-info` and `report` request handling
 - `SyncController` startup sync and active/inactive report behavior
 
-## Manual Test For Step 3
+## Manual Test For Steps 3-10
 
 1. Run the app from Xcode.
 2. Confirm the setup window appears automatically if the app is not registered yet.
 3. Complete registration with real server credentials.
 4. Confirm diagnostics shows `Registered` and the returned instance ID.
 5. Keep the session unlocked with the screen awake for at least 30 seconds.
-6. Open diagnostics and confirm `Last Client-Info` and `Last Report` update.
-7. Confirm `Foreground App` changes when you switch apps.
-8. Confirm `Last Device State` reflects the server response from `/report`.
-9. Stop the app.
-10. Run it again.
-11. Confirm setup does not appear again.
-12. Open diagnostics and confirm the saved registration is still loaded.
+6. Open the dashboard and confirm screen time and usage sections are populated.
+7. Switch between apps and confirm `Foreground App` and dashboard usage values update.
+8. Open diagnostics and confirm `Last Client-Info` and `Last Report` update.
+9. Confirm `Last Device State` reflects the server response from `/report`.
+10. Stop the app.
+11. Run it again.
+12. Confirm setup does not appear again.
+13. Open dashboard and diagnostics and confirm the saved registration is still loaded.
+14. Open `All My Devices` and confirm grouped usage cards load from the server.
+15. Use `Unregister This Mac` and confirm the app returns to setup mode.
+16. Verify `~/Library/Application Support/FamilyRulesAgent/` no longer contains the local databases/log after unregister.
 
-## What Step 3 Includes
+## What Steps 3-10 Include
 
 - initial setup UI
 - registration against `POST /api/v2/register-instance`
@@ -193,15 +241,19 @@ The current test suite covers:
 - startup and 10-minute `client-info` scheduling
 - startup and 30-second `/report` scheduling while active
 - foreground-app tracking for report payloads
+- visible-app tracking for local accounting
 - basic local sync logging and sync status in diagnostics/menu
+- parent-facing dashboard with live usage summary and per-app breakdowns
+- server-backed `All My Devices` window
+- explicit unregister flow with server deregistration and local cleanup
+- command queue persistence and `SEND_LOGS`
 
 ## What Is Still Not Included Yet
 
-- start-at-login
 - watchdog relaunch
 - permissions flow
-- blocked app handling
-- lock/logout flows
+- historical dashboard trends
+- signed `.pkg` build/notarization artifacts checked into this repo
 
 Those are planned in later steps in `PLAN.md`.
 

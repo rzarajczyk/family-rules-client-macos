@@ -1,4 +1,5 @@
 import Foundation
+import SQLite3
 
 @MainActor
 final class SyncController: ObservableObject {
@@ -7,10 +8,18 @@ final class SyncController: ObservableObject {
     @Published private(set) var lastReportDescription = "Never"
     @Published private(set) var lastDeviceState = "Unknown"
     @Published private(set) var lastErrorMessage: String?
+    @Published private(set) var lastCommandErrorMessage: String?
     @Published private(set) var recentLogLines: [String] = []
+    @Published private(set) var blockedAppIdentifiers: Set<String> = []
+    @Published private(set) var blockedAppNames: [String: String] = [:]
+    @Published private(set) var pendingCommandCount = 0
+    @Published private(set) var lastCommandDescription = "None"
 
     private let activityMonitor: any ActivityMonitorProtocol
     private let syncClient: any ServerSyncClientProtocol
+    private let lifecycleController: (any LifecycleControlling)?
+    private let commandStore: any ServerCommandStoreProtocol
+    private let diagnosticsLogStore: any DiagnosticsLogStoreProtocol
     private let appVersionProvider: () -> String
     private let timezoneProvider: () -> Int
     private let clientInfoIntervalSeconds: Int
@@ -23,10 +32,15 @@ final class SyncController: ObservableObject {
     private var reportTask: Task<Void, Never>?
     private var isSendingClientInfo = false
     private var isSendingReport = false
+    private var isFetchingBlockedApps = false
+    private var isProcessingCommands = false
 
     init(
         activityMonitor: any ActivityMonitorProtocol,
         syncClient: any ServerSyncClientProtocol = ServerSyncClient(),
+        lifecycleController: (any LifecycleControlling)? = nil,
+        commandStore: any ServerCommandStoreProtocol = SQLiteServerCommandStore(),
+        diagnosticsLogStore: any DiagnosticsLogStoreProtocol = DiagnosticsLogStore(),
         appVersionProvider: @escaping () -> String = SyncController.defaultAppVersion,
         timezoneProvider: @escaping () -> Int = { TimeZone.current.secondsFromGMT() },
         clientInfoIntervalSeconds: Int = 600,
@@ -38,21 +52,30 @@ final class SyncController: ObservableObject {
     ) {
         self.activityMonitor = activityMonitor
         self.syncClient = syncClient
+        self.lifecycleController = lifecycleController
+        self.commandStore = commandStore
+        self.diagnosticsLogStore = diagnosticsLogStore
         self.appVersionProvider = appVersionProvider
         self.timezoneProvider = timezoneProvider
         self.clientInfoIntervalSeconds = clientInfoIntervalSeconds
         self.reportIntervalSeconds = reportIntervalSeconds
         self.automaticLoops = automaticLoops
         self.sleep = sleep
+        // I/O deferred to start() to avoid blocking the main thread during init.
     }
 
     func start(registration: RegistrationRecord) async {
         stop()
 
         self.registration = registration
+        lifecycleController?.start(registration: registration)
         syncStatus = "Starting"
+        // Load persisted diagnostics state now that we are starting (not in init).
+        refreshDiagnosticsState()
         recordLog("Starting sync for \(registration.instanceName)")
 
+        // The closure is `@MainActor` because `ActivityMonitorProtocol` is `@MainActor`-isolated,
+        // so `self` is always accessed on the main actor — no extra hop needed.
         activityMonitor.onKnownAppsChanged = { [weak self] in
             guard let self else { return }
             Task { @MainActor in
@@ -83,6 +106,9 @@ final class SyncController: ObservableObject {
         reportTask = nil
         registration = nil
         activityMonitor.onKnownAppsChanged = nil
+        lifecycleController?.stop()
+        blockedAppIdentifiers = []
+        blockedAppNames = [:]
 
         if syncStatus != "Idle" {
             syncStatus = "Idle"
@@ -113,8 +139,15 @@ final class SyncController: ObservableObject {
         }
     }
 
-    private func sendClientInfo(reason: String) async {
+    func sendClientInfo(reason: String) async {
         guard let registration, !isSendingClientInfo else { return }
+
+        if lifecycleController?.isAdminDisabled == true {
+            syncStatus = "Admin Disabled"
+            recordLog("Skipped client-info (\(reason)) while admin disabled")
+            return
+        }
+
         isSendingClientInfo = true
         defer { isSendingClientInfo = false }
 
@@ -129,11 +162,60 @@ final class SyncController: ObservableObject {
                     description: nil,
                     arguments: nil
                 ),
+                AvailableStatePayload(
+                    deviceState: "APP_DISABLED",
+                    title: "Admin Disabled",
+                    icon: nil,
+                    description: nil,
+                    arguments: nil
+                ),
+                AvailableStatePayload(
+                    deviceState: "LOCK_SCREEN",
+                    title: "Lock Screen",
+                    icon: nil,
+                    description: nil,
+                    arguments: nil
+                ),
+                AvailableStatePayload(
+                    deviceState: "LOCK_SCREEN_WITH_TIMEOUT",
+                    title: "Lock Screen With Countdown",
+                    icon: nil,
+                    description: nil,
+                    arguments: ["seconds"]
+                ),
+                AvailableStatePayload(
+                    deviceState: "LOGOUT",
+                    title: "Logout",
+                    icon: nil,
+                    description: nil,
+                    arguments: nil
+                ),
+                AvailableStatePayload(
+                    deviceState: "LOGOUT_WITH_TIMEOUT",
+                    title: "Logout With Countdown",
+                    icon: nil,
+                    description: nil,
+                    arguments: ["seconds"]
+                ),
+                AvailableStatePayload(
+                    deviceState: "BLOCK_RESTRICTED_APPS",
+                    title: "Block Restricted Apps",
+                    icon: nil,
+                    description: nil,
+                    arguments: nil
+                ),
+                AvailableStatePayload(
+                    deviceState: "BLOCK_RESTRICTED_APPS_WITH_TIMEOUT",
+                    title: "Block Restricted Apps With Countdown",
+                    icon: nil,
+                    description: nil,
+                    arguments: ["seconds"]
+                ),
             ],
             timezoneOffsetSeconds: timezoneProvider(),
             reportIntervalSeconds: reportIntervalSeconds,
             knownApps: snapshot.knownApps.mapValues { KnownAppPayload(appName: $0.name, iconBase64Png: nil) },
-            supportedServerCommands: []
+            supportedServerCommands: ["SEND_LOGS"]
         )
 
         do {
@@ -142,6 +224,7 @@ final class SyncController: ObservableObject {
             lastErrorMessage = nil
             syncStatus = syncStatus == "Paused" ? "Paused" : "Healthy"
             recordLog("Sent client-info (\(reason)) with \(payload.knownApps.count) known apps")
+            await processPendingCommands(reason: "client-info \(reason)")
         } catch {
             syncStatus = "Error"
             lastErrorMessage = error.localizedDescription
@@ -149,8 +232,14 @@ final class SyncController: ObservableObject {
         }
     }
 
-    private func sendReportIfEligible(reason: String) async {
+    func sendReportIfEligible(reason: String) async {
         guard let registration, !isSendingReport else { return }
+
+        if lifecycleController?.isAdminDisabled == true {
+            syncStatus = "Admin Disabled"
+            recordLog("Skipped report (\(reason)) while admin disabled")
+            return
+        }
 
         let snapshot = activityMonitor.snapshot()
         guard snapshot.isEligibleForReporting else {
@@ -173,9 +262,13 @@ final class SyncController: ObservableObject {
 
             lastReportDescription = "\(timestamp()) via \(reason)"
             lastDeviceState = response.deviceState
+            lifecycleController?.updateServerDeviceState(response.deviceState, extra: response.extra)
+            await refreshBlockedAppsIfNeeded(reason: reason, deviceState: response.deviceState)
+            try storeIncomingCommands(response.serverCommands, reason: reason)
             lastErrorMessage = nil
-            syncStatus = "Healthy"
+            syncStatus = lifecycleController?.isAdminDisabled == true ? "Admin Disabled" : "Healthy"
             recordLog("Sent report (\(reason)) with \(snapshot.applications.count) apps and state \(response.deviceState)")
+            await processPendingCommands(reason: "report \(reason)")
         } catch {
             syncStatus = "Error"
             lastErrorMessage = error.localizedDescription
@@ -183,22 +276,475 @@ final class SyncController: ObservableObject {
         }
     }
 
-    private func recordLog(_ message: String) {
-        recentLogLines.insert("[\(timestamp())] \(message)", at: 0)
+    func recordUninstallLog(_ message: String) {
+        recordLog(message)
+    }
 
-        if recentLogLines.count > 20 {
-            recentLogLines.removeLast(recentLogLines.count - 20)
+    private func refreshBlockedAppsIfNeeded(reason: String, deviceState: String) async {
+        guard let registration else { return }
+
+        let normalized = LifecycleStateBridge.normalize(deviceState)
+        let shouldFetch = normalized == "BLOCK_RESTRICTED_APPS" || normalized == "BLOCK_RESTRICTED_APPS_WITH_TIMEOUT"
+
+        guard shouldFetch else {
+            if !blockedAppIdentifiers.isEmpty || !blockedAppNames.isEmpty {
+                blockedAppIdentifiers = []
+                blockedAppNames = [:]
+                recordLog("Cleared blocked-app cache after state \(normalized)")
+            }
+            return
+        }
+
+        // Fetch (or re-fetch) blocked apps on every report while in BLOCK state so that
+        // changes the parent makes to the blocked list are picked up without requiring a
+        // state transition.
+        guard !isFetchingBlockedApps else { return }
+        isFetchingBlockedApps = true
+        defer { isFetchingBlockedApps = false }
+
+        do {
+            let apps = try await syncClient.fetchBlockedApps(registration: registration)
+            blockedAppIdentifiers = Set(apps.map(\.appPath))
+            blockedAppNames = apps.reduce(into: [:]) { partialResult, app in
+                if let name = app.appName, !name.isEmpty {
+                    partialResult[app.appPath] = name
+                }
+            }
+            recordLog("Fetched blocked apps (\(reason)) count=\(apps.count)")
+        } catch {
+            lastErrorMessage = error.localizedDescription
+            recordLog("Blocked-app fetch failed (\(reason)): \(error.localizedDescription)")
         }
     }
 
-    private func timestamp() -> String {
+    private func processPendingCommands(reason: String) async {
+        guard let registration, !isProcessingCommands else { return }
+
+        isProcessingCommands = true
+        defer {
+            isProcessingCommands = false
+            refreshDiagnosticsState()
+        }
+
+        do {
+            let ackPending = try commandStore.commandsPendingAckUpload()
+            if !ackPending.isEmpty {
+                try await syncClient.sendCommandAcks(
+                    CommandAcksUploadPayload(
+                        commandAcks: ackPending.map {
+                            CommandAckUploadEntryPayload(
+                                commandId: $0.commandId,
+                                commandName: $0.commandName,
+                                protocolVersion: $0.protocolVersion,
+                                acknowledgedAt: timestampString(Date())
+                            )
+                        }
+                    ),
+                    registration: registration
+                )
+                try commandStore.markAcksUploaded(commandIDs: ackPending.map(\.commandId))
+                recordLog("Acknowledged \(ackPending.count) server command(s) (\(reason))")
+            }
+
+            let executionPending = try commandStore.commandsPendingExecution()
+            for command in executionPending {
+                let result = try execute(command: command)
+                try commandStore.storeExecutionResult(result, for: command.commandId)
+                lastCommandDescription = "\(command.commandName): \(result.status.lowercased())"
+                recordLog("Executed server command \(command.commandName) (\(reason)): \(result.message)")
+            }
+
+            let resultPending = try commandStore.commandsPendingResultUpload()
+            if !resultPending.isEmpty {
+                try await syncClient.sendCommandResults(
+                    CommandResultsUploadPayload(
+                        commandResults: resultPending.compactMap { command in
+                            guard let result = command.executionResult else { return nil }
+                            return CommandResultUploadEntryPayload(
+                                commandId: command.commandId,
+                                commandName: command.commandName,
+                                protocolVersion: command.protocolVersion,
+                                completedAt: result.completedAt,
+                                status: result.status,
+                                message: result.message,
+                                details: result.details
+                            )
+                        }
+                    ),
+                    registration: registration
+                )
+                try commandStore.markResultsUploaded(commandIDs: resultPending.map(\.commandId))
+                recordLog("Uploaded \(resultPending.count) command result(s) (\(reason))")
+            }
+
+            lastErrorMessage = nil
+            lastCommandErrorMessage = nil
+        } catch {
+            // Command processing failures are recorded separately so they don't
+            // degrade the sync health indicator set by a successful client-info or report.
+            lastCommandErrorMessage = error.localizedDescription
+            recordLog("Command processing failed (\(reason)): \(error.localizedDescription)")
+        }
+    }
+
+    private func storeIncomingCommands(_ commands: [ServerCommandPayload], reason: String) throws {
+        guard !commands.isEmpty else { return }
+
+        let inserted = try commandStore.saveNewCommands(commands)
+        if inserted > 0 {
+            recordLog("Queued \(inserted) new server command(s) (\(reason))")
+        }
+        refreshDiagnosticsState()
+    }
+
+    private func execute(command: StoredServerCommand) throws -> StoredCommandExecutionResult {
+        switch command.commandName.uppercased() {
+        case "SEND_LOGS":
+            let archive = try diagnosticsLogStore.exportArchive()
+            return StoredCommandExecutionResult(
+                completedAt: timestampString(Date()),
+                status: "COMPLETED",
+                message: archive.lineCount == 0 ? "No diagnostics logs were available." : "Uploaded \(archive.lineCount) diagnostics log line(s).",
+                details: [
+                    "logs": archive.text,
+                    "lineCount": String(archive.lineCount),
+                ]
+            )
+        default:
+            return StoredCommandExecutionResult(
+                completedAt: timestampString(Date()),
+                status: "FAILED",
+                message: "Unsupported server command \(command.commandName).",
+                details: ["commandName": command.commandName]
+            )
+        }
+    }
+
+    private func refreshDiagnosticsState() {
+        recentLogLines = (try? diagnosticsLogStore.loadRecentLines(limit: 20)) ?? recentLogLines
+        pendingCommandCount = (try? commandStore.pendingCommandCount()) ?? pendingCommandCount
+    }
+
+    private func recordLog(_ message: String) {
+        let line = "[\(timestamp())] \(message)"
+
+        do {
+            try diagnosticsLogStore.append(line: line)
+            recentLogLines = (try? diagnosticsLogStore.loadRecentLines(limit: 20)) ?? recentLogLines
+        } catch {
+            recentLogLines.insert(line, at: 0)
+            if recentLogLines.count > 20 {
+                recentLogLines.removeLast(recentLogLines.count - 20)
+            }
+        }
+    }
+
+    private static let timeFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.timeStyle = .medium
         formatter.dateStyle = .none
-        return formatter.string(from: Date())
+        return formatter
+    }()
+
+    private static let iso8601Formatter: ISO8601DateFormatter = ISO8601DateFormatter()
+
+    private func timestamp() -> String {
+        SyncController.timeFormatter.string(from: Date())
+    }
+
+    private func timestampString(_ date: Date) -> String {
+        SyncController.iso8601Formatter.string(from: date)
     }
 
     nonisolated private static func defaultAppVersion() -> String {
         (Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String) ?? "0.1.0"
     }
 }
+
+protocol ServerCommandStoreProtocol {
+    func saveNewCommands(_ commands: [ServerCommandPayload]) throws -> Int
+    func commandsPendingAckUpload() throws -> [StoredServerCommand]
+    func markAcksUploaded(commandIDs: [String]) throws
+    func commandsPendingExecution() throws -> [StoredServerCommand]
+    func storeExecutionResult(_ result: StoredCommandExecutionResult, for commandID: String) throws
+    func commandsPendingResultUpload() throws -> [StoredServerCommand]
+    func markResultsUploaded(commandIDs: [String]) throws
+    func pendingCommandCount() throws -> Int
+}
+
+struct StoredServerCommand: Equatable {
+    let commandId: String
+    let commandName: String
+    let issuedAt: String
+    let protocolVersion: Int
+    let ackUploaded: Bool
+    let resultUploaded: Bool
+    let executionResult: StoredCommandExecutionResult?
+}
+
+struct StoredCommandExecutionResult: Codable, Equatable {
+    let completedAt: String
+    let status: String
+    let message: String
+    let details: [String: String]
+}
+
+final class SQLiteServerCommandStore: ServerCommandStoreProtocol {
+    private let databaseURL: URL
+    private let encoder = JSONEncoder()
+    private let decoder = JSONDecoder()
+
+    init(databaseURL: URL = AgentPersistencePaths.commandQueueDatabaseURL) {
+        self.databaseURL = databaseURL
+    }
+
+    func saveNewCommands(_ commands: [ServerCommandPayload]) throws -> Int {
+        guard !commands.isEmpty else { return 0 }
+
+        return try withDatabase { database in
+            try database.execute(sql: "BEGIN IMMEDIATE TRANSACTION")
+
+            do {
+                let sql = "INSERT OR IGNORE INTO server_commands(command_id, command_name, issued_at, protocol_version, ack_uploaded, result_uploaded, result_json) VALUES(?, ?, ?, ?, 0, 0, NULL)"
+                var statement: OpaquePointer?
+
+                guard sqlite3_prepare_v2(database, sql, -1, &statement, nil) == SQLITE_OK else {
+                    throw CommandStoreError.prepareFailed(message: database.errorMessage)
+                }
+
+                defer { sqlite3_finalize(statement) }
+
+                var inserted = 0
+                for command in commands {
+                    sqlite3_reset(statement)
+                    sqlite3_clear_bindings(statement)
+
+                    try bind(text: command.commandId, at: 1, to: statement, database: database)
+                    try bind(text: command.commandName, at: 2, to: statement, database: database)
+                    try bind(text: command.issuedAt, at: 3, to: statement, database: database)
+                    guard sqlite3_bind_int(statement, 4, Int32(command.protocolVersion)) == SQLITE_OK else {
+                        throw CommandStoreError.bindFailed(message: database.errorMessage)
+                    }
+
+                    guard sqlite3_step(statement) == SQLITE_DONE else {
+                        throw CommandStoreError.stepFailed(message: database.errorMessage)
+                    }
+
+                    if sqlite3_changes(database) > 0 {
+                        inserted += 1
+                    }
+                }
+
+                try database.execute(sql: "COMMIT TRANSACTION")
+                return inserted
+            } catch {
+                try? database.execute(sql: "ROLLBACK TRANSACTION")
+                throw error
+            }
+        }
+    }
+
+    func commandsPendingAckUpload() throws -> [StoredServerCommand] {
+        try loadCommands(whereClause: "ack_uploaded = 0")
+    }
+
+    func markAcksUploaded(commandIDs: [String]) throws {
+        try update(commandIDs: commandIDs, sql: "UPDATE server_commands SET ack_uploaded = 1 WHERE command_id = ?")
+    }
+
+    func commandsPendingExecution() throws -> [StoredServerCommand] {
+        try loadCommands(whereClause: "ack_uploaded = 1 AND result_json IS NULL")
+    }
+
+    func storeExecutionResult(_ result: StoredCommandExecutionResult, for commandID: String) throws {
+        let json = try String(decoding: encoder.encode(result), as: UTF8.self)
+        try withDatabase { database in
+            var statement: OpaquePointer?
+            let sql = "UPDATE server_commands SET result_json = ? WHERE command_id = ?"
+
+            guard sqlite3_prepare_v2(database, sql, -1, &statement, nil) == SQLITE_OK else {
+                throw CommandStoreError.prepareFailed(message: database.errorMessage)
+            }
+
+            defer { sqlite3_finalize(statement) }
+
+            try bind(text: json, at: 1, to: statement, database: database)
+            try bind(text: commandID, at: 2, to: statement, database: database)
+
+            guard sqlite3_step(statement) == SQLITE_DONE else {
+                throw CommandStoreError.stepFailed(message: database.errorMessage)
+            }
+        }
+    }
+
+    func commandsPendingResultUpload() throws -> [StoredServerCommand] {
+        try loadCommands(whereClause: "result_json IS NOT NULL AND result_uploaded = 0")
+    }
+
+    func markResultsUploaded(commandIDs: [String]) throws {
+        try update(commandIDs: commandIDs, sql: "UPDATE server_commands SET result_uploaded = 1 WHERE command_id = ?")
+    }
+
+    func pendingCommandCount() throws -> Int {
+        try withDatabase { database in
+            var statement: OpaquePointer?
+            let sql = "SELECT COUNT(*) FROM server_commands WHERE result_uploaded = 0"
+
+            guard sqlite3_prepare_v2(database, sql, -1, &statement, nil) == SQLITE_OK else {
+                throw CommandStoreError.prepareFailed(message: database.errorMessage)
+            }
+
+            defer { sqlite3_finalize(statement) }
+
+            guard sqlite3_step(statement) == SQLITE_ROW else {
+                throw CommandStoreError.stepFailed(message: database.errorMessage)
+            }
+
+            return Int(sqlite3_column_int(statement, 0))
+        }
+    }
+
+    private func update(commandIDs: [String], sql: String) throws {
+        guard !commandIDs.isEmpty else { return }
+
+        try withDatabase { database in
+            try database.execute(sql: "BEGIN IMMEDIATE TRANSACTION")
+
+            do {
+                var statement: OpaquePointer?
+                guard sqlite3_prepare_v2(database, sql, -1, &statement, nil) == SQLITE_OK else {
+                    throw CommandStoreError.prepareFailed(message: database.errorMessage)
+                }
+
+                defer { sqlite3_finalize(statement) }
+
+                for commandID in commandIDs {
+                    sqlite3_reset(statement)
+                    sqlite3_clear_bindings(statement)
+                    try bind(text: commandID, at: 1, to: statement, database: database)
+
+                    guard sqlite3_step(statement) == SQLITE_DONE else {
+                        throw CommandStoreError.stepFailed(message: database.errorMessage)
+                    }
+                }
+
+                try database.execute(sql: "COMMIT TRANSACTION")
+            } catch {
+                try? database.execute(sql: "ROLLBACK TRANSACTION")
+                throw error
+            }
+        }
+    }
+
+    private func loadCommands(whereClause: String) throws -> [StoredServerCommand] {
+        try withDatabase { database in
+            var statement: OpaquePointer?
+            let sql = "SELECT command_id, command_name, issued_at, protocol_version, ack_uploaded, result_uploaded, result_json FROM server_commands WHERE \(whereClause) ORDER BY issued_at ASC"
+
+            guard sqlite3_prepare_v2(database, sql, -1, &statement, nil) == SQLITE_OK else {
+                throw CommandStoreError.prepareFailed(message: database.errorMessage)
+            }
+
+            defer { sqlite3_finalize(statement) }
+
+            var commands: [StoredServerCommand] = []
+            while sqlite3_step(statement) == SQLITE_ROW {
+                guard
+                    let commandIDCString = sqlite3_column_text(statement, 0),
+                    let commandNameCString = sqlite3_column_text(statement, 1),
+                    let issuedAtCString = sqlite3_column_text(statement, 2)
+                else {
+                    continue
+                }
+
+                let resultJSON = sqlite3_column_text(statement, 6).map { String(cString: $0) }
+                let result = try resultJSON.map { json in
+                    try decoder.decode(StoredCommandExecutionResult.self, from: Data(json.utf8))
+                }
+
+                commands.append(
+                    StoredServerCommand(
+                        commandId: String(cString: commandIDCString),
+                        commandName: String(cString: commandNameCString),
+                        issuedAt: String(cString: issuedAtCString),
+                        protocolVersion: Int(sqlite3_column_int(statement, 3)),
+                        ackUploaded: sqlite3_column_int(statement, 4) != 0,
+                        resultUploaded: sqlite3_column_int(statement, 5) != 0,
+                        executionResult: result
+                    )
+                )
+            }
+
+            return commands
+        }
+    }
+
+    private func withDatabase<T>(_ body: (OpaquePointer) throws -> T) throws -> T {
+        try FileManager.default.createDirectory(
+            at: AgentPersistencePaths.applicationSupportDirectory,
+            withIntermediateDirectories: true
+        )
+
+        var database: OpaquePointer?
+        guard sqlite3_open_v2(databaseURL.path(percentEncoded: false), &database, SQLITE_OPEN_CREATE | SQLITE_OPEN_READWRITE | SQLITE_OPEN_FULLMUTEX, nil) == SQLITE_OK,
+              let database else {
+            throw CommandStoreError.openFailed(message: database?.errorMessage ?? "Unknown SQLite open error")
+        }
+
+        defer { sqlite3_close(database) }
+
+        try database.execute(sql: "CREATE TABLE IF NOT EXISTS server_commands (command_id TEXT PRIMARY KEY NOT NULL, command_name TEXT NOT NULL, issued_at TEXT NOT NULL, protocol_version INTEGER NOT NULL, ack_uploaded INTEGER NOT NULL DEFAULT 0, result_uploaded INTEGER NOT NULL DEFAULT 0, result_json TEXT)")
+
+        return try body(database)
+    }
+
+    private func bind(text: String, at index: Int32, to statement: OpaquePointer?, database: OpaquePointer) throws {
+        guard sqlite3_bind_text(statement, index, text, -1, SQLITE_TRANSIENT) == SQLITE_OK else {
+            throw CommandStoreError.bindFailed(message: database.errorMessage)
+        }
+    }
+}
+
+private enum CommandStoreError: LocalizedError {
+    case openFailed(message: String)
+    case prepareFailed(message: String)
+    case bindFailed(message: String)
+    case stepFailed(message: String)
+    case executeFailed(message: String)
+
+    var errorDescription: String? {
+        switch self {
+        case let .openFailed(message):
+            return "Failed to open the command queue database: \(message)"
+        case let .prepareFailed(message):
+            return "Failed to prepare a command queue statement: \(message)"
+        case let .bindFailed(message):
+            return "Failed to bind a command queue value: \(message)"
+        case let .stepFailed(message):
+            return "Failed to update command queue state: \(message)"
+        case let .executeFailed(message):
+            return "Failed to execute a command queue statement: \(message)"
+        }
+    }
+}
+
+private extension OpaquePointer {
+    var errorMessage: String {
+        guard let cString = sqlite3_errmsg(self) else {
+            return "Unknown SQLite error"
+        }
+
+        return String(cString: cString)
+    }
+
+    func execute(sql: String) throws {
+        guard sqlite3_exec(self, sql, nil, nil, nil) == SQLITE_OK else {
+            throw CommandStoreError.executeFailed(message: errorMessage)
+        }
+    }
+}
+
+// SQLite does not expose SQLITE_TRANSIENT as a Swift constant. The underlying
+// value is -1 cast to the destructor function pointer type, meaning SQLite will
+// make its own copy of any bound string value before the call returns.
+private let SQLITE_TRANSIENT = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
