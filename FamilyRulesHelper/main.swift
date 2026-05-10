@@ -43,6 +43,7 @@ final class HelperDelegate: NSObject, NSXPCListenerDelegate, FamilyRulesHelperXP
                 updatePollingState()
                 reply("helper updated at \(dateFormatter.string(from: clock()))")
             } catch {
+                DiagnosticsLogger.record(error: error, context: "Helper failed to decode agent status")
                 reply("helper update failed: \(error.localizedDescription)")
             }
         }
@@ -55,6 +56,7 @@ final class HelperDelegate: NSObject, NSXPCListenerDelegate, FamilyRulesHelperXP
                 let data = try JSONEncoder().encode(payload)
                 reply(data, nil)
             } catch {
+                DiagnosticsLogger.record(error: error, context: "Helper failed to encode lifecycle status")
                 reply(nil, error.localizedDescription)
             }
         }
@@ -68,6 +70,7 @@ final class HelperDelegate: NSObject, NSXPCListenerDelegate, FamilyRulesHelperXP
                 stateStore.recordAction(result, at: clock())
                 reply(result, nil)
             } catch {
+                DiagnosticsLogger.record(error: error, context: "Helper failed to execute device action")
                 reply(nil, error.localizedDescription)
             }
         }
@@ -119,6 +122,7 @@ final class HelperDelegate: NSObject, NSXPCListenerDelegate, FamilyRulesHelperXP
             queue.async { [self] in
                 stateStore.recordPollFailure(error.localizedDescription, at: now)
             }
+            DiagnosticsLogger.record(error: error, context: "Helper reactivation poll failed")
         }
     }
 
@@ -137,8 +141,7 @@ final class HelperDelegate: NSObject, NSXPCListenerDelegate, FamilyRulesHelperXP
         switch action {
         case .lockScreen:
             let process = Process()
-            process.executableURL = URL(fileURLWithPath: "/System/Library/CoreServices/Menu Extras/User.menu/Contents/Resources/CGSession")
-            process.arguments = ["-suspend"]
+            process.executableURL = URL(fileURLWithPath: "/System/Library/CoreServices/RemoteManagement/AppleVNCServer.bundle/Contents/Support/LockScreen.app/Contents/MacOS/LockScreen")
             try process.run()
             return "Lock requested"
         case .logout:
@@ -147,6 +150,12 @@ final class HelperDelegate: NSObject, NSXPCListenerDelegate, FamilyRulesHelperXP
             process.arguments = ["-e", "tell application \"System Events\" to log out"]
             try process.run()
             return "Logout requested"
+        case .switchUser:
+            let process = Process()
+            process.executableURL = URL(fileURLWithPath: "/System/Library/CoreServices/loginwindow.app/Contents/MacOS/loginwindow")
+            process.arguments = [">switch-user"]
+            try process.run()
+            return "Switch user requested"
         case .terminateApp:
             guard let targetIdentifier, !targetIdentifier.isEmpty else {
                 throw HelperActionError.missingTargetIdentifier
@@ -163,6 +172,54 @@ final class HelperDelegate: NSObject, NSXPCListenerDelegate, FamilyRulesHelperXP
 
             return "Terminate requested for \(targetIdentifier)"
         }
+    }
+}
+
+private enum DiagnosticsLogger {
+    private static let logURL: URL = {
+        let fileManager = FileManager.default
+        let root = (try? fileManager.url(
+            for: .applicationSupportDirectory,
+            in: .userDomainMask,
+            appropriateFor: nil,
+            create: true
+        )) ?? URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent("Library/Application Support")
+
+        return root
+            .appendingPathComponent("FamilyRulesAgent", isDirectory: true)
+            .appendingPathComponent("Diagnostics.log")
+    }()
+
+    static func record(_ message: String) {
+        let line = "[\(timestamp())] \(message)"
+        let data = Data((line + "\n").utf8)
+        let fileManager = FileManager.default
+
+        try? fileManager.createDirectory(at: logURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+        if fileManager.fileExists(atPath: logURL.path(percentEncoded: false)) {
+            if let handle = try? FileHandle(forWritingTo: logURL) {
+                defer { try? handle.close() }
+                try? handle.seekToEnd()
+                try? handle.write(contentsOf: data)
+            }
+        } else {
+            try? data.write(to: logURL, options: .atomic)
+        }
+    }
+
+    static func record(error: Error, context: String) {
+        record("ERROR: \(context): \(error.localizedDescription)")
+    }
+
+    private static let formatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.timeStyle = .medium
+        formatter.dateStyle = .none
+        return formatter
+    }()
+
+    private static func timestamp() -> String {
+        formatter.string(from: Date())
     }
 }
 

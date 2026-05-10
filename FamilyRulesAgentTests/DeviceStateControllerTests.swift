@@ -33,9 +33,9 @@ final class DeviceStateControllerTests: XCTestCase {
         try await waitForRequestCount(helperClient, count: 1)
 
         XCTAssertEqual(controller.normalizedState, "LOGOUT")
-        XCTAssertEqual(controller.statusDescription, "Logout requested")
+        XCTAssertEqual(controller.statusDescription, "Switch user requested")
         let requests = await helperClient.recordedRequests()
-        XCTAssertEqual(requests.map(\.action), [.logout])
+        XCTAssertEqual(requests.map(\.action), [.switchUser])
     }
 
     func testRestrictedAppCountdownEnablesBlockingAfterDelay() async {
@@ -60,6 +60,26 @@ final class DeviceStateControllerTests: XCTestCase {
         XCTAssertEqual(controller.statusDescription, "Blocking Restricted Apps")
     }
 
+    func testRepeatedTimeoutStateDoesNotResetActiveCountdown() async {
+        let helperClient = HelperLifecycleClientActionStub()
+        let now = LockedNow(date: Date(timeIntervalSince1970: 1_000))
+        let controller = DeviceStateController(
+            helperClient: helperClient,
+            countdownDurationProvider: { _, _ in 60 },
+            sleep: { _ in },
+            now: { now.value }
+        )
+
+        controller.apply(rawState: "LOCK_SCREEN_WITH_TIMEOUT", extra: nil)
+        XCTAssertEqual(controller.countdownPresentation?.secondsRemaining, 60)
+
+        now.advance(by: 17)
+        controller.apply(rawState: "LOCK_SCREEN_WITH_TIMEOUT", extra: nil)
+
+        XCTAssertEqual(controller.countdownPresentation?.secondsRemaining, 43)
+        XCTAssertEqual(controller.statusDescription, "Locking in 43s")
+    }
+
     private func waitForRequestCount(_ stub: HelperLifecycleClientActionStub, count: Int, timeout: TimeInterval = 2) async throws {
         let deadline = Date().addingTimeInterval(timeout)
         while Date() < deadline {
@@ -68,6 +88,18 @@ final class DeviceStateControllerTests: XCTestCase {
             await Task.yield()
         }
         XCTFail("Timed out waiting for recorded request count >= \(count)")
+    }
+}
+
+private final class LockedNow {
+    var value: Date
+
+    init(date: Date) {
+        value = date
+    }
+
+    func advance(by seconds: TimeInterval) {
+        value.addTimeInterval(seconds)
     }
 }
 
@@ -102,6 +134,8 @@ private actor HelperLifecycleClientActionStub: HelperLifecycleClientProtocol {
             return "Logout requested"
         case .terminateApp:
             return "Terminate requested"
+        case .switchUser:
+            return "Switch user requested"
         }
     }
 

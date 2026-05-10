@@ -1,6 +1,7 @@
 import AppKit
 import CoreGraphics
 import Foundation
+import SQLite3
 
 struct KnownAppInfo: Equatable, Sendable {
     let identifier: String
@@ -23,6 +24,19 @@ struct UsageSnapshot: Equatable {
     let knownApps: [String: KnownAppInfo]
     /// True when screen is awake and session is active.
     let isEligibleForReporting: Bool
+}
+
+struct PersistedUsageState: Equatable {
+    let dayStart: Date
+    let screenTimeSeconds: TimeInterval
+    let applicationUsageSeconds: [String: TimeInterval]
+    let visibleApplicationUsageSeconds: [String: TimeInterval]
+    let knownApps: [String: KnownAppInfo]
+}
+
+protocol UsageStoreProtocol {
+    func load(dayStart: Date) throws -> PersistedUsageState?
+    func save(_ state: PersistedUsageState) throws
 }
 
 @MainActor
@@ -57,7 +71,8 @@ struct UsageAccumulator {
         calendar: Calendar = .current,
         currentApp: KnownAppInfo? = nil,
         isScreenAwake: Bool = true,
-        isSessionActive: Bool = true
+        isSessionActive: Bool = true,
+        persistedState: PersistedUsageState? = nil
     ) {
         self.calendar = calendar
         self.currentApp = currentApp
@@ -65,9 +80,34 @@ struct UsageAccumulator {
         self.isSessionActive = isSessionActive
         self.lastUpdatedAt = now
 
+        if let persistedState,
+           calendar.startOfDay(for: now) == persistedState.dayStart {
+            screenTimeSeconds = persistedState.screenTimeSeconds
+            applicationUsageSeconds = persistedState.applicationUsageSeconds
+            visibleApplicationUsageSeconds = persistedState.visibleApplicationUsageSeconds
+            knownApps = persistedState.knownApps
+        }
+
         if let currentApp {
             knownApps[currentApp.identifier] = currentApp
         }
+    }
+
+    init(
+        now: Date,
+        calendar: Calendar = .current,
+        currentApp: KnownAppInfo? = nil,
+        isScreenAwake: Bool = true,
+        isSessionActive: Bool = true
+    ) {
+        self.init(
+            now: now,
+            calendar: calendar,
+            currentApp: currentApp,
+            isScreenAwake: isScreenAwake,
+            isSessionActive: isSessionActive,
+            persistedState: nil
+        )
     }
 
     var currentAppName: String {
@@ -121,6 +161,18 @@ struct UsageAccumulator {
         )
     }
 
+    mutating func persistedState(at date: Date) -> PersistedUsageState {
+        advance(to: date)
+
+        return PersistedUsageState(
+            dayStart: calendar.startOfDay(for: date),
+            screenTimeSeconds: screenTimeSeconds,
+            applicationUsageSeconds: applicationUsageSeconds,
+            visibleApplicationUsageSeconds: visibleApplicationUsageSeconds,
+            knownApps: knownApps
+        )
+    }
+
     private var isEligibleForReporting: Bool {
         isScreenAwake && isSessionActive
     }
@@ -136,6 +188,12 @@ struct UsageAccumulator {
             screenTimeSeconds = 0
             applicationUsageSeconds.removeAll()
             visibleApplicationUsageSeconds.removeAll()
+            knownApps.removeAll()
+
+            if let currentApp {
+                knownApps[currentApp.identifier] = currentApp
+            }
+
             lastUpdatedAt = currentDayStart
         }
 
@@ -174,6 +232,7 @@ final class ActivityMonitor: ObservableObject, ActivityMonitorProtocol {
 
     private let workspace: NSWorkspace
     private let clock: () -> Date
+    private let usageStore: any UsageStoreProtocol
     /// Overridable window lister for testability; defaults to CGWindowListCopyWindowInfo.
     private let windowLister: () -> [WindowInfo]
     private var observers: [NSObjectProtocol] = []
@@ -183,14 +242,26 @@ final class ActivityMonitor: ObservableObject, ActivityMonitorProtocol {
     init(
         workspace: NSWorkspace = .shared,
         clock: @escaping () -> Date = Date.init,
-        windowLister: (() -> [WindowInfo])? = nil
+        windowLister: (() -> [WindowInfo])? = nil,
+        usageStore: any UsageStoreProtocol = SQLiteUsageStore()
     ) {
         self.workspace = workspace
         self.clock = clock
+        self.usageStore = usageStore
         self.windowLister = windowLister ?? { Self.queryVisibleWindows() }
 
+        let now = clock()
         let initialApp = Self.knownApp(from: workspace.frontmostApplication)
-        let initialAccumulator = UsageAccumulator(now: clock(), currentApp: initialApp)
+        let persistedState: PersistedUsageState?
+
+        do {
+            persistedState = try usageStore.load(dayStart: Calendar.current.startOfDay(for: now))
+        } catch {
+            persistedState = nil
+            DiagnosticsLogger.record(error: error, context: "Failed to load persisted usage state")
+        }
+
+        let initialAccumulator = UsageAccumulator(now: now, currentApp: initialApp, persistedState: persistedState)
 
         accumulator = initialAccumulator
         frontmostApplicationName = initialAccumulator.currentAppName
@@ -281,6 +352,8 @@ final class ActivityMonitor: ObservableObject, ActivityMonitorProtocol {
     func stop() {
         guard !observers.isEmpty else { return }
 
+        persistAccumulator(at: clock())
+
         let center = workspace.notificationCenter
         for observer in observers { center.removeObserver(observer) }
         observers.removeAll()
@@ -314,6 +387,7 @@ final class ActivityMonitor: ObservableObject, ActivityMonitorProtocol {
     }
 
     private func reconcile() {
+        let now = clock()
         let windows = windowLister()
         var visibleIDs: Set<String> = []
         var lookup: [String: KnownAppInfo] = [:]
@@ -336,8 +410,9 @@ final class ActivityMonitor: ObservableObject, ActivityMonitorProtocol {
         }
 
         let previousKnownIDs = Set(accumulator.knownApps.keys)
-        accumulator.setVisibleAppIDs(visibleIDs, knownAppLookup: lookup, at: clock())
+        accumulator.setVisibleAppIDs(visibleIDs, knownAppLookup: lookup, at: now)
         visibleAppCount = visibleIDs.count
+        persistAccumulator(at: now)
 
         if Set(accumulator.knownApps.keys) != previousKnownIDs {
             onKnownAppsChanged?()
@@ -351,9 +426,11 @@ final class ActivityMonitor: ObservableObject, ActivityMonitorProtocol {
     }
 
     private func setFrontmostApp(_ app: KnownAppInfo?) {
+        let now = clock()
         let previousKnownIDs = Set(accumulator.knownApps.keys)
-        accumulator.setFrontmostApp(app, at: clock())
+        accumulator.setFrontmostApp(app, at: now)
         frontmostApplicationName = accumulator.currentAppName
+        persistAccumulator(at: now)
 
         if Set(accumulator.knownApps.keys) != previousKnownIDs {
             onKnownAppsChanged?()
@@ -361,13 +438,25 @@ final class ActivityMonitor: ObservableObject, ActivityMonitorProtocol {
     }
 
     private func setScreenAwake(_ isScreenAwake: Bool) {
-        accumulator.setScreenAwake(isScreenAwake, at: clock())
+        let now = clock()
+        accumulator.setScreenAwake(isScreenAwake, at: now)
         self.isScreenAwake = isScreenAwake
+        persistAccumulator(at: now)
     }
 
     private func setSessionActive(_ isSessionActive: Bool) {
-        accumulator.setSessionActive(isSessionActive, at: clock())
+        let now = clock()
+        accumulator.setSessionActive(isSessionActive, at: now)
         self.isSessionActive = isSessionActive
+        persistAccumulator(at: now)
+    }
+
+    private func persistAccumulator(at date: Date) {
+        do {
+            try usageStore.save(accumulator.persistedState(at: date))
+        } catch {
+            DiagnosticsLogger.record(error: error, context: "Failed to persist usage state")
+        }
     }
 
     // MARK: - Helpers
@@ -409,3 +498,286 @@ final class ActivityMonitor: ObservableObject, ActivityMonitorProtocol {
         }
     }
 }
+
+final class SQLiteUsageStore: UsageStoreProtocol {
+    private let databaseURL: URL
+    private let fileManager: FileManager
+
+    init(databaseURL: URL = AgentPersistencePaths.settingsDatabaseURL, fileManager: FileManager = .default) {
+        self.databaseURL = databaseURL
+        self.fileManager = fileManager
+    }
+
+    func load(dayStart: Date) throws -> PersistedUsageState? {
+        try withDatabase { database in
+            let dayStartEpoch = dayStart.timeIntervalSince1970
+            let screenTimeSeconds = try loadScreenTime(dayStartEpoch: dayStartEpoch, database: database)
+            let applicationUsageSeconds = try loadUsageMap(
+                tableName: "usage_daily_foreground",
+                dayStartEpoch: dayStartEpoch,
+                database: database
+            )
+            let visibleApplicationUsageSeconds = try loadUsageMap(
+                tableName: "usage_daily_visible",
+                dayStartEpoch: dayStartEpoch,
+                database: database
+            )
+            let knownApps = try loadKnownApps(dayStartEpoch: dayStartEpoch, database: database)
+
+            guard screenTimeSeconds != nil || !applicationUsageSeconds.isEmpty || !visibleApplicationUsageSeconds.isEmpty || !knownApps.isEmpty else {
+                return nil
+            }
+
+            return PersistedUsageState(
+                dayStart: dayStart,
+                screenTimeSeconds: screenTimeSeconds ?? 0,
+                applicationUsageSeconds: applicationUsageSeconds,
+                visibleApplicationUsageSeconds: visibleApplicationUsageSeconds,
+                knownApps: knownApps
+            )
+        }
+    }
+
+    func save(_ state: PersistedUsageState) throws {
+        try withDatabase { database in
+            let dayStartEpoch = state.dayStart.timeIntervalSince1970
+            try database.execute(sql: "BEGIN IMMEDIATE TRANSACTION")
+
+            do {
+                try upsertScreenTime(dayStartEpoch: dayStartEpoch, totalSeconds: state.screenTimeSeconds, database: database)
+                try upsertUsageMap(
+                    tableName: "usage_daily_foreground",
+                    dayStartEpoch: dayStartEpoch,
+                    values: state.applicationUsageSeconds,
+                    database: database
+                )
+                try upsertUsageMap(
+                    tableName: "usage_daily_visible",
+                    dayStartEpoch: dayStartEpoch,
+                    values: state.visibleApplicationUsageSeconds,
+                    database: database
+                )
+                try upsertKnownApps(dayStartEpoch: dayStartEpoch, knownApps: state.knownApps, database: database)
+                try database.execute(sql: "COMMIT TRANSACTION")
+            } catch {
+                try? database.execute(sql: "ROLLBACK TRANSACTION")
+                throw error
+            }
+        }
+    }
+
+    private func loadScreenTime(dayStartEpoch: TimeInterval, database: OpaquePointer) throws -> TimeInterval? {
+        var statement: OpaquePointer?
+        let sql = "SELECT total_seconds FROM screen_time_daily WHERE day_start_epoch = ?"
+
+        guard sqlite3_prepare_v2(database, sql, -1, &statement, nil) == SQLITE_OK else {
+            throw UsageStoreError.prepareFailed(message: database.errorMessage)
+        }
+
+        defer { sqlite3_finalize(statement) }
+        try bind(double: dayStartEpoch, at: 1, to: statement, database: database)
+
+        switch sqlite3_step(statement) {
+        case SQLITE_ROW:
+            return sqlite3_column_double(statement, 0)
+        case SQLITE_DONE:
+            return nil
+        default:
+            throw UsageStoreError.stepFailed(message: database.errorMessage)
+        }
+    }
+
+    private func loadUsageMap(tableName: String, dayStartEpoch: TimeInterval, database: OpaquePointer) throws -> [String: TimeInterval] {
+        var statement: OpaquePointer?
+        let sql = "SELECT app_identifier, total_seconds FROM \(tableName) WHERE day_start_epoch = ?"
+
+        guard sqlite3_prepare_v2(database, sql, -1, &statement, nil) == SQLITE_OK else {
+            throw UsageStoreError.prepareFailed(message: database.errorMessage)
+        }
+
+        defer { sqlite3_finalize(statement) }
+        try bind(double: dayStartEpoch, at: 1, to: statement, database: database)
+
+        var result: [String: TimeInterval] = [:]
+        while sqlite3_step(statement) == SQLITE_ROW {
+            guard let identifier = sqlite3_column_text(statement, 0).map({ String(cString: $0) }) else {
+                continue
+            }
+
+            result[identifier] = sqlite3_column_double(statement, 1)
+        }
+
+        if sqlite3_errcode(database) != SQLITE_OK && sqlite3_errcode(database) != SQLITE_ROW && sqlite3_errcode(database) != SQLITE_DONE {
+            throw UsageStoreError.stepFailed(message: database.errorMessage)
+        }
+
+        return result
+    }
+
+    private func loadKnownApps(dayStartEpoch: TimeInterval, database: OpaquePointer) throws -> [String: KnownAppInfo] {
+        var statement: OpaquePointer?
+        let sql = "SELECT app_identifier, app_name FROM known_apps WHERE day_start_epoch = ?"
+
+        guard sqlite3_prepare_v2(database, sql, -1, &statement, nil) == SQLITE_OK else {
+            throw UsageStoreError.prepareFailed(message: database.errorMessage)
+        }
+
+        defer { sqlite3_finalize(statement) }
+        try bind(double: dayStartEpoch, at: 1, to: statement, database: database)
+
+        var result: [String: KnownAppInfo] = [:]
+        while sqlite3_step(statement) == SQLITE_ROW {
+            guard let identifier = sqlite3_column_text(statement, 0).map({ String(cString: $0) }),
+                  let name = sqlite3_column_text(statement, 1).map({ String(cString: $0) }) else {
+                continue
+            }
+
+            result[identifier] = KnownAppInfo(identifier: identifier, name: name)
+        }
+
+        if sqlite3_errcode(database) != SQLITE_OK && sqlite3_errcode(database) != SQLITE_ROW && sqlite3_errcode(database) != SQLITE_DONE {
+            throw UsageStoreError.stepFailed(message: database.errorMessage)
+        }
+
+        return result
+    }
+
+    private func upsertScreenTime(dayStartEpoch: TimeInterval, totalSeconds: TimeInterval, database: OpaquePointer) throws {
+        var statement: OpaquePointer?
+        let sql = "INSERT INTO screen_time_daily(day_start_epoch, total_seconds) VALUES(?, ?) ON CONFLICT(day_start_epoch) DO UPDATE SET total_seconds = excluded.total_seconds"
+
+        guard sqlite3_prepare_v2(database, sql, -1, &statement, nil) == SQLITE_OK else {
+            throw UsageStoreError.prepareFailed(message: database.errorMessage)
+        }
+
+        defer { sqlite3_finalize(statement) }
+        try bind(double: dayStartEpoch, at: 1, to: statement, database: database)
+        try bind(double: totalSeconds, at: 2, to: statement, database: database)
+
+        guard sqlite3_step(statement) == SQLITE_DONE else {
+            throw UsageStoreError.stepFailed(message: database.errorMessage)
+        }
+    }
+
+    private func upsertUsageMap(tableName: String, dayStartEpoch: TimeInterval, values: [String: TimeInterval], database: OpaquePointer) throws {
+        guard !values.isEmpty else { return }
+
+        var statement: OpaquePointer?
+        let sql = "INSERT INTO \(tableName)(day_start_epoch, app_identifier, total_seconds) VALUES(?, ?, ?) ON CONFLICT(day_start_epoch, app_identifier) DO UPDATE SET total_seconds = excluded.total_seconds"
+
+        guard sqlite3_prepare_v2(database, sql, -1, &statement, nil) == SQLITE_OK else {
+            throw UsageStoreError.prepareFailed(message: database.errorMessage)
+        }
+
+        defer { sqlite3_finalize(statement) }
+
+        for (identifier, totalSeconds) in values {
+            sqlite3_reset(statement)
+            sqlite3_clear_bindings(statement)
+            try bind(double: dayStartEpoch, at: 1, to: statement, database: database)
+            try bind(text: identifier, at: 2, to: statement, database: database)
+            try bind(double: totalSeconds, at: 3, to: statement, database: database)
+
+            guard sqlite3_step(statement) == SQLITE_DONE else {
+                throw UsageStoreError.stepFailed(message: database.errorMessage)
+            }
+        }
+    }
+
+    private func upsertKnownApps(dayStartEpoch: TimeInterval, knownApps: [String: KnownAppInfo], database: OpaquePointer) throws {
+        guard !knownApps.isEmpty else { return }
+
+        var statement: OpaquePointer?
+        let sql = "INSERT INTO known_apps(day_start_epoch, app_identifier, app_name) VALUES(?, ?, ?) ON CONFLICT(day_start_epoch, app_identifier) DO UPDATE SET app_name = excluded.app_name"
+
+        guard sqlite3_prepare_v2(database, sql, -1, &statement, nil) == SQLITE_OK else {
+            throw UsageStoreError.prepareFailed(message: database.errorMessage)
+        }
+
+        defer { sqlite3_finalize(statement) }
+
+        for app in knownApps.values {
+            sqlite3_reset(statement)
+            sqlite3_clear_bindings(statement)
+            try bind(double: dayStartEpoch, at: 1, to: statement, database: database)
+            try bind(text: app.identifier, at: 2, to: statement, database: database)
+            try bind(text: app.name, at: 3, to: statement, database: database)
+
+            guard sqlite3_step(statement) == SQLITE_DONE else {
+                throw UsageStoreError.stepFailed(message: database.errorMessage)
+            }
+        }
+    }
+
+    private func withDatabase<T>(_ body: (OpaquePointer) throws -> T) throws -> T {
+        try fileManager.createDirectory(at: databaseURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+
+        var database: OpaquePointer?
+        guard sqlite3_open_v2(databaseURL.path(percentEncoded: false), &database, SQLITE_OPEN_CREATE | SQLITE_OPEN_READWRITE | SQLITE_OPEN_FULLMUTEX, nil) == SQLITE_OK,
+              let database else {
+            throw UsageStoreError.openFailed(message: database?.errorMessage ?? "Unknown SQLite open error")
+        }
+
+        defer { sqlite3_close(database) }
+
+        try database.execute(sql: "CREATE TABLE IF NOT EXISTS screen_time_daily (day_start_epoch REAL PRIMARY KEY NOT NULL, total_seconds REAL NOT NULL)")
+        try database.execute(sql: "CREATE TABLE IF NOT EXISTS usage_daily_foreground (day_start_epoch REAL NOT NULL, app_identifier TEXT NOT NULL, total_seconds REAL NOT NULL, PRIMARY KEY(day_start_epoch, app_identifier))")
+        try database.execute(sql: "CREATE TABLE IF NOT EXISTS usage_daily_visible (day_start_epoch REAL NOT NULL, app_identifier TEXT NOT NULL, total_seconds REAL NOT NULL, PRIMARY KEY(day_start_epoch, app_identifier))")
+        try database.execute(sql: "CREATE TABLE IF NOT EXISTS known_apps (day_start_epoch REAL NOT NULL, app_identifier TEXT NOT NULL, app_name TEXT NOT NULL, PRIMARY KEY(day_start_epoch, app_identifier))")
+
+        return try body(database)
+    }
+
+    private func bind(text: String, at index: Int32, to statement: OpaquePointer?, database: OpaquePointer) throws {
+        guard sqlite3_bind_text(statement, index, text, -1, SQLITE_TRANSIENT) == SQLITE_OK else {
+            throw UsageStoreError.bindFailed(message: database.errorMessage)
+        }
+    }
+
+    private func bind(double: Double, at index: Int32, to statement: OpaquePointer?, database: OpaquePointer) throws {
+        guard sqlite3_bind_double(statement, index, double) == SQLITE_OK else {
+            throw UsageStoreError.bindFailed(message: database.errorMessage)
+        }
+    }
+}
+
+private enum UsageStoreError: LocalizedError {
+    case openFailed(message: String)
+    case prepareFailed(message: String)
+    case bindFailed(message: String)
+    case stepFailed(message: String)
+    case executeFailed(message: String)
+
+    var errorDescription: String? {
+        switch self {
+        case let .openFailed(message):
+            return "Failed to open the usage database: \(message)"
+        case let .prepareFailed(message):
+            return "Failed to prepare a usage database statement: \(message)"
+        case let .bindFailed(message):
+            return "Failed to bind a usage database value: \(message)"
+        case let .stepFailed(message):
+            return "Failed to update usage database state: \(message)"
+        case let .executeFailed(message):
+            return "Failed to execute a usage database statement: \(message)"
+        }
+    }
+}
+
+private extension OpaquePointer {
+    var errorMessage: String {
+        guard let cString = sqlite3_errmsg(self) else {
+            return "Unknown SQLite error"
+        }
+
+        return String(cString: cString)
+    }
+
+    func execute(sql: String) throws {
+        guard sqlite3_exec(self, sql, nil, nil, nil) == SQLITE_OK else {
+            throw UsageStoreError.executeFailed(message: errorMessage)
+        }
+    }
+}
+
+private let SQLITE_TRANSIENT = unsafeBitCast(-1, to: sqlite3_destructor_type.self)

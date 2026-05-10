@@ -40,6 +40,7 @@ struct HelperLifecycleStatusPayload: Codable, Equatable, Sendable {
 enum HelperDeviceAction: String, Codable, Equatable, Sendable {
     case lockScreen = "LOCK_SCREEN"
     case logout = "LOGOUT"
+    case switchUser = "SWITCH_USER"
     case terminateApp = "TERMINATE_APP"
 }
 
@@ -88,7 +89,7 @@ enum LifecycleStateBridge {
         case "LOCK_SCREEN", "LOCK_SCREEN_WITH_TIMEOUT":
             return .lockScreen
         case "LOGOUT", "LOGOUT_WITH_TIMEOUT":
-            return .logout
+            return .switchUser
         default:
             return nil
         }

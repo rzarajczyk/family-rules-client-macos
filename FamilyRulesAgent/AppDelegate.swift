@@ -54,12 +54,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     private var statusItem: NSStatusItem?
     private var dashboardWindowController: NSWindowController?
-    private var allDevicesWindowController: NSWindowController?
     private var diagnosticsWindowController: NSWindowController?
     private var setupWindowController: NSWindowController?
     private var syncStatusMenuItem: NSMenuItem?
     private var foregroundAppMenuItem: NSMenuItem?
     private var lifecycleStatusMenuItem: NSMenuItem?
+    private var moreMenu: NSMenu?
+    private var switchUserEnforcementTask: Task<Void, Never>?
     private var stateWindowControllers: [NSWindowController] = []
     private var refreshTask: Task<Void, Never>?
     private var restrictedAppEnforcementState = RestrictedAppEnforcementState()
@@ -102,11 +103,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     @objc
     private func openDashboardWindow() {
         if dashboardWindowController == nil {
+#if DEBUG
+            let debugQuitAction: (() -> Void)? = { [weak self] in self?.debugQuit() }
+#else
+            let debugQuitAction: (() -> Void)? = nil
+#endif
+
             let hostingController = NSHostingController(rootView: DashboardView(
                 appModel: appModel,
                 activityMonitor: activityMonitor,
                 syncController: syncController,
-                lifecycleController: lifecycleController
+                lifecycleController: lifecycleController,
+                allDevicesModel: allDevicesModel,
+                onOpenDiagnostics: { [weak self] in self?.openDiagnosticsWindow() },
+                onOpenSetup: { [weak self] in self?.openSetupWindow() },
+                onPingHelper: { [weak self] in self?.pingHelper() },
+                onUnregister: { [weak self] in self?.unregisterThisMac() },
+                onDebugQuit: debugQuitAction
             ))
             let window = NSWindow(contentViewController: hostingController)
             window.title = "FamilyRules Dashboard"
@@ -118,31 +131,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         NSApp.activate(ignoringOtherApps: true)
         dashboardWindowController?.showWindow(nil)
         dashboardWindowController?.window?.makeKeyAndOrderFront(nil)
-    }
-
-    @objc
-    private func openAllDevicesWindow() {
-        if allDevicesWindowController == nil {
-            let hostingController = NSHostingController(rootView: AllDevicesView(
-                appModel: appModel,
-                model: allDevicesModel
-            ))
-            let window = NSWindow(contentViewController: hostingController)
-            window.title = "FamilyRules All My Devices"
-            window.setContentSize(NSSize(width: 860, height: 680))
-            window.isReleasedWhenClosed = false
-            allDevicesWindowController = NSWindowController(window: window)
-        }
-
-        // Only refresh if data is stale or absent, to avoid a network hit every tap.
-        let isStale = allDevicesLastRefreshedAt.map { Date().timeIntervalSince($0) > allDevicesStalenessInterval } ?? true
-        if isStale || allDevicesModel.groups.isEmpty {
-            allDevicesLastRefreshedAt = Date()
-            allDevicesModel.refresh(registration: appModel.registration)
-        }
-        NSApp.activate(ignoringOtherApps: true)
-        allDevicesWindowController?.showWindow(nil)
-        allDevicesWindowController?.window?.makeKeyAndOrderFront(nil)
     }
 
     @objc
@@ -241,7 +229,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
             allDevicesModel.refresh(registration: nil)
             dashboardWindowController?.close()
-            allDevicesWindowController?.close()
             diagnosticsWindowController?.close()
             openSetupWindow()
         }
@@ -267,30 +254,56 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         if shouldShow {
             let screens = NSScreen.screens
-            // Remove controllers whose window no longer matches a live screen frame.
-            stateWindowControllers = stateWindowControllers.filter { wc in
-                guard let w = wc.window else { return false }
-                return screens.contains { $0.frame == w.frame }
+            // Remove controllers whose window no longer matches a live screen.
+            var retainedControllers: [NSWindowController] = []
+            for wc in stateWindowControllers {
+                guard let window = wc.window else { continue }
+
+                let shouldRetain: Bool
+                if lifecycleController.shouldPresentCompactCountdown {
+                    shouldRetain = compactCountdownScreen(for: window, screens: screens) != nil
+                } else {
+                    shouldRetain = screens.contains { $0.frame == window.frame }
+                }
+
+                if shouldRetain {
+                    retainedControllers.append(wc)
+                } else {
+                    window.close()
+                }
             }
+            stateWindowControllers = retainedControllers
             // Add a window for any screen that does not yet have one.
-            for screen in screens {
-                let alreadyCovered = stateWindowControllers.contains { $0.window?.frame == screen.frame }
+            let targetScreens = screens
+            for screen in targetScreens {
+                let targetFrame = lifecycleController.shouldPresentCompactCountdown ? compactCountdownFrame(for: screen) : screen.frame
+                let alreadyCovered = stateWindowControllers.contains { controller in
+                    guard let window = controller.window else { return false }
+                    if lifecycleController.shouldPresentCompactCountdown {
+                        return compactCountdownScreen(for: window, screens: screens) == screen
+                    }
+
+                    return window.frame == targetFrame
+                }
                 if !alreadyCovered {
                     let hostingController = NSHostingController(rootView: StateOverlayView(
                         countdownPresentation: lifecycleController.countdownPresentation,
                         restrictedAppPresentation: restrictedAppPresentation,
+                        compactCountdown: lifecycleController.shouldPresentCompactCountdown,
                         onMinimizeAllWindows: { [weak self] in self?.handleMinimizeRestrictedAppWindows() }
                     ))
-                    let window = NSWindow(contentViewController: hostingController)
+                    let window = NSPanel(contentViewController: hostingController)
                     window.titleVisibility = .hidden
                     window.titlebarAppearsTransparent = true
-                    window.styleMask = [.borderless]
-                    window.level = .screenSaver
+                    window.styleMask = lifecycleController.shouldPresentCompactCountdown ? [.borderless, .nonactivatingPanel] : [.borderless]
+                    window.level = stateWindowLevel(compactCountdown: lifecycleController.shouldPresentCompactCountdown)
                     window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
                     window.backgroundColor = .clear
                     window.isOpaque = false
+                    window.hidesOnDeactivate = false
                     window.ignoresMouseEvents = false
-                    window.setFrame(screen.frame, display: true)
+                    window.setFrame(targetFrame, display: true)
+                    window.isMovableByWindowBackground = lifecycleController.shouldPresentCompactCountdown
                     window.isReleasedWhenClosed = false
                     let wc = NSWindowController(window: window)
                     stateWindowControllers.append(wc)
@@ -303,17 +316,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                     hc.rootView = StateOverlayView(
                         countdownPresentation: lifecycleController.countdownPresentation,
                         restrictedAppPresentation: restrictedAppPresentation,
+                        compactCountdown: lifecycleController.shouldPresentCompactCountdown,
                         onMinimizeAllWindows: { [weak self] in self?.handleMinimizeRestrictedAppWindows() }
                     )
                 }
                 wc.window?.title = title
-                wc.window?.level = .screenSaver
+                wc.window?.level = stateWindowLevel(compactCountdown: lifecycleController.shouldPresentCompactCountdown)
+                if !lifecycleController.shouldPresentCompactCountdown,
+                   let screen = screenContaining(window: wc.window, screens: screens) {
+                    wc.window?.setFrame(screen.frame, display: true)
+                }
                 wc.window?.orderFrontRegardless()
             }
         } else {
             stateWindowControllers.forEach { $0.window?.close() }
             stateWindowControllers = []
         }
+
+        updateSwitchUserLoop()
     }
 
     private func handleMinimizeRestrictedAppWindows() {
@@ -369,6 +389,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         allDevicesLastRefreshedAt = Date()
         allDevicesModel.refresh(registration: appModel.registration)
         openDiagnosticsWindow()
+        openDashboardWindow()
     }
 
 #if DEBUG
@@ -383,9 +404,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         statusItem = item
 
         if let button = item.button {
-            button.image = NSImage(systemSymbolName: "shield.lefthalf.filled", accessibilityDescription: "FamilyRules")
-            button.image?.isTemplate = true
+            updateStatusItemImage()
             button.toolTip = "FamilyRules"
+            button.target = self
+            button.action = #selector(handleStatusItemClick(_:))
+            button.sendAction(on: [.leftMouseUp, .rightMouseUp])
         }
 
         let menu = NSMenu()
@@ -409,14 +432,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         self.lifecycleStatusMenuItem = lifecycleStatusMenuItem
 
         menu.addItem(.separator())
-
-        let openDashboard = NSMenuItem(title: "Open Dashboard", action: #selector(openDashboardWindow), keyEquivalent: "")
-        openDashboard.target = self
-        menu.addItem(openDashboard)
-
-        let openAllDevices = NSMenuItem(title: "Open All My Devices", action: #selector(openAllDevicesWindow), keyEquivalent: "")
-        openAllDevices.target = self
-        menu.addItem(openAllDevices)
 
         let openDiagnostics = NSMenuItem(title: "Open Diagnostics", action: #selector(openDiagnosticsWindow), keyEquivalent: "")
         openDiagnostics.target = self
@@ -443,15 +458,112 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(debugQuit)
 #endif
 
-        item.menu = menu
+        moreMenu = menu
         refreshMenuStatusItems()
+    }
+
+    @objc
+    private func handleStatusItemClick(_ sender: NSStatusBarButton) {
+        guard let event = NSApp.currentEvent else {
+            openDashboardWindow()
+            return
+        }
+
+        if event.type == .rightMouseUp || event.modifierFlags.contains(.control) {
+            openDashboardMenu(of: sender)
+            return
+        }
+
+        openDashboardWindow()
+    }
+
+    private func openDashboardMenu(of view: NSView? = nil) {
+        guard let menu = moreMenu else { return }
+        refreshMenuStatusItems()
+
+        let statusButton = statusItem?.button
+        let anchorView = view ?? statusButton
+        guard let anchorView else { return }
+
+        menu.popUp(positioning: nil, at: NSPoint(x: 0, y: anchorView.bounds.height + 4), in: anchorView)
+    }
+
+    private func refreshAllDevicesIfNeeded(force: Bool = false) {
+        let isStale = allDevicesLastRefreshedAt.map { Date().timeIntervalSince($0) > allDevicesStalenessInterval } ?? true
+        guard force || isStale || allDevicesModel.groups.isEmpty else { return }
+        allDevicesLastRefreshedAt = Date()
+        allDevicesModel.refresh(registration: appModel.registration)
+    }
+
+    private func compactCountdownFrame(for screen: NSScreen?) -> NSRect {
+        guard let visibleFrame = screen?.visibleFrame else {
+            return NSRect(x: 0, y: 0, width: 280, height: 170)
+        }
+
+        return NSRect(
+            x: visibleFrame.maxX - 304,
+            y: visibleFrame.maxY - 194,
+            width: 280,
+            height: 170
+        )
+    }
+
+    private func stateWindowLevel(compactCountdown: Bool) -> NSWindow.Level {
+        compactCountdown ? NSWindow.Level(rawValue: NSWindow.Level.screenSaver.rawValue + 1) : .screenSaver
+    }
+
+    private func screenContaining(window: NSWindow?, screens: [NSScreen]) -> NSScreen? {
+        guard let frame = window?.frame else { return nil }
+        let center = NSPoint(x: frame.midX, y: frame.midY)
+        return screens.first { $0.frame.contains(center) }
+    }
+
+    private func compactCountdownScreen(for window: NSWindow, screens: [NSScreen]) -> NSScreen? {
+        if let screen = window.screen, screens.contains(screen) {
+            return screen
+        }
+
+        return screenContaining(window: window, screens: screens)
+    }
+
+    private func updateSwitchUserLoop() {
+        if lifecycleController.shouldEnforceSwitchUserLoop {
+            guard switchUserEnforcementTask == nil else { return }
+
+            switchUserEnforcementTask = Task { @MainActor [weak self] in
+                while let self, !Task.isCancelled, self.lifecycleController.shouldEnforceSwitchUserLoop {
+                    do {
+                        _ = try await HelperXPCClient().executeDeviceAction(HelperDeviceActionRequest(action: .switchUser, requestedAt: Date()))
+                    } catch {
+                        DiagnosticsLogger.record(error: error, context: "Failed to enforce switch-user loop")
+                    }
+
+                    do {
+                        try await Task.sleep(for: .seconds(3))
+                    } catch {
+                        return
+                    }
+                }
+            }
+        } else {
+            switchUserEnforcementTask?.cancel()
+            switchUserEnforcementTask = nil
+        }
     }
 
     private func refreshMenuStatusItems() {
         syncStatusMenuItem?.title = "Sync: \(syncController.syncStatus)"
         foregroundAppMenuItem?.title = "Foreground: \(activityMonitor.frontmostApplicationName)"
         lifecycleStatusMenuItem?.title = "Lifecycle: \(lifecycleController.statusDescription)"
+        updateStatusItemImage()
         updateStateWindow()
+    }
+
+    private func updateStatusItemImage() {
+        statusItem?.button?.image = AppIconImage.loadStatusBarImage(
+            blockingEnabled: appModel.isRegistered && lifecycleController.lastObservedDeviceState != "ACTIVE",
+            size: NSSize(width: 18, height: 18)
+        )
     }
 
     private func startRefreshLoop() {

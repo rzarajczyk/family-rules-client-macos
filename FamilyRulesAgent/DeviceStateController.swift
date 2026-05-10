@@ -6,6 +6,8 @@ protocol DeviceStateControlling: AnyObject {
     var statusDescription: String { get }
     var countdownPresentation: StateCountdownPresentation? { get }
     var restrictedAppBlockingEnabled: Bool { get }
+    var shouldPresentCompactCountdown: Bool { get }
+    var shouldEnforceSwitchUserLoop: Bool { get }
     func apply(rawState: String, extra: String?)
     func clear()
 }
@@ -16,13 +18,18 @@ final class DeviceStateController: ObservableObject, DeviceStateControlling {
     @Published private(set) var statusDescription = "Active"
     @Published private(set) var countdownPresentation: StateCountdownPresentation?
     @Published private(set) var restrictedAppBlockingEnabled = false
+    @Published private(set) var shouldPresentCompactCountdown = false
+    @Published private(set) var shouldEnforceSwitchUserLoop = false
 
     private let helperClient: any HelperLifecycleClientProtocol
     private let countdownDurationProvider: (String, String?) -> Int
     private let sleep: @Sendable (Int) async throws -> Void
+    private let now: () -> Date
 
     private var countdownTask: Task<Void, Never>?
     private var executionTask: Task<Void, Never>?
+    private var activeCountdownState: String?
+    private var countdownDeadline: Date?
 
     init(
         helperClient: any HelperLifecycleClientProtocol = HelperXPCClient(),
@@ -34,11 +41,28 @@ final class DeviceStateController: ObservableObject, DeviceStateControlling {
         self.helperClient = helperClient
         self.countdownDurationProvider = countdownDurationProvider
         self.sleep = sleep
+        self.now = Date.init
+    }
+
+    init(
+        helperClient: any HelperLifecycleClientProtocol,
+        countdownDurationProvider: @escaping (String, String?) -> Int,
+        sleep: @escaping @Sendable (Int) async throws -> Void,
+        now: @escaping () -> Date
+    ) {
+        self.helperClient = helperClient
+        self.countdownDurationProvider = countdownDurationProvider
+        self.sleep = sleep
+        self.now = now
     }
 
     func apply(rawState: String, extra: String?) {
         let normalized = LifecycleStateBridge.normalize(rawState)
         normalizedState = normalized
+
+        if refreshExistingCountdownIfNeeded(for: normalized) {
+            return
+        }
 
         countdownTask?.cancel()
         countdownTask = nil
@@ -46,6 +70,10 @@ final class DeviceStateController: ObservableObject, DeviceStateControlling {
         executionTask = nil
         countdownPresentation = nil
         restrictedAppBlockingEnabled = false
+        shouldPresentCompactCountdown = false
+        shouldEnforceSwitchUserLoop = false
+        activeCountdownState = nil
+        countdownDeadline = nil
 
         switch normalized {
         case "ACTIVE":
@@ -59,7 +87,8 @@ final class DeviceStateController: ObservableObject, DeviceStateControlling {
             statusDescription = "Locking Screen"
             executeHelperAction(for: normalized)
         case "LOGOUT":
-            statusDescription = "Logging Out"
+            statusDescription = "Switching User"
+            shouldEnforceSwitchUserLoop = true
             executeHelperAction(for: normalized)
         case "BLOCK_RESTRICTED_APPS_WITH_TIMEOUT", "LOCK_SCREEN_WITH_TIMEOUT", "LOGOUT_WITH_TIMEOUT":
             let seconds = max(1, countdownDurationProvider(normalized, extra))
@@ -79,10 +108,17 @@ final class DeviceStateController: ObservableObject, DeviceStateControlling {
         statusDescription = "Active"
         countdownPresentation = nil
         restrictedAppBlockingEnabled = false
+        shouldPresentCompactCountdown = false
+        shouldEnforceSwitchUserLoop = false
+        activeCountdownState = nil
+        countdownDeadline = nil
     }
 
     private func startCountdown(for normalized: String, secondsRemaining: Int) {
+        activeCountdownState = normalized
+        countdownDeadline = now().addingTimeInterval(TimeInterval(secondsRemaining))
         countdownPresentation = countdownPresentation(for: normalized, secondsRemaining: secondsRemaining)
+        shouldPresentCompactCountdown = normalized == "LOCK_SCREEN_WITH_TIMEOUT" || normalized == "LOGOUT_WITH_TIMEOUT"
 
         countdownTask = Task { [weak self] in
             guard let self else { return }
@@ -110,6 +146,9 @@ final class DeviceStateController: ObservableObject, DeviceStateControlling {
 
             guard !Task.isCancelled else { return }
             self.countdownPresentation = nil
+            self.shouldPresentCompactCountdown = false
+            self.activeCountdownState = nil
+            self.countdownDeadline = nil
 
             switch normalized {
             case "BLOCK_RESTRICTED_APPS_WITH_TIMEOUT":
@@ -122,7 +161,8 @@ final class DeviceStateController: ObservableObject, DeviceStateControlling {
                 self.executeHelperAction(for: "LOCK_SCREEN")
             case "LOGOUT_WITH_TIMEOUT":
                 self.normalizedState = "LOGOUT"
-                self.statusDescription = "Logging Out"
+                self.statusDescription = "Switching User"
+                self.shouldEnforceSwitchUserLoop = true
                 self.executeHelperAction(for: "LOGOUT")
             default:
                 break
@@ -130,8 +170,34 @@ final class DeviceStateController: ObservableObject, DeviceStateControlling {
         }
     }
 
+    private func refreshExistingCountdownIfNeeded(for normalized: String) -> Bool {
+        guard normalized == activeCountdownState,
+              countdownTask != nil,
+              let secondsRemaining = currentCountdownSecondsRemaining()
+        else {
+            return false
+        }
+
+        countdownPresentation = countdownPresentation(for: normalized, secondsRemaining: secondsRemaining)
+        statusDescription = countdownStatusDescription(for: normalized, secondsRemaining: secondsRemaining)
+        shouldPresentCompactCountdown = normalized == "LOCK_SCREEN_WITH_TIMEOUT" || normalized == "LOGOUT_WITH_TIMEOUT"
+        return true
+    }
+
+    private func currentCountdownSecondsRemaining() -> Int? {
+        guard let countdownDeadline else { return nil }
+        return max(0, Int(ceil(countdownDeadline.timeIntervalSince(now()))))
+    }
+
     private func executeHelperAction(for normalized: String) {
         guard let action = LifecycleStateBridge.helperAction(for: normalized) else { return }
+        executeHelperAction(action: action)
+    }
+
+    private func executeHelperAction(action: HelperDeviceAction) {
+        if action != .switchUser {
+            shouldEnforceSwitchUserLoop = false
+        }
 
         executionTask = Task { [weak self] in
             guard let self else { return }
@@ -141,6 +207,7 @@ final class DeviceStateController: ObservableObject, DeviceStateControlling {
                 let reply = try await self.helperClient.executeDeviceAction(request)
                 self.statusDescription = reply
             } catch {
+                DiagnosticsLogger.record(error: error, context: "Failed to execute helper action \(action.rawValue)")
                 self.statusDescription = error.localizedDescription
             }
         }
@@ -157,13 +224,13 @@ final class DeviceStateController: ObservableObject, DeviceStateControlling {
         case "LOCK_SCREEN_WITH_TIMEOUT":
             return StateCountdownPresentation(
                 title: "Screen lock scheduled",
-                message: "This Mac will lock soon.",
+                message: "Save your work before the screen locks.",
                 secondsRemaining: secondsRemaining
             )
         default:
             return StateCountdownPresentation(
-                title: "Logout scheduled",
-                message: "This macOS session will log out soon.",
+                title: "User switch scheduled",
+                message: "Save your work before macOS switches to the login window.",
                 secondsRemaining: secondsRemaining
             )
         }
@@ -176,7 +243,7 @@ final class DeviceStateController: ObservableObject, DeviceStateControlling {
         case "LOCK_SCREEN_WITH_TIMEOUT":
             return "Locking in \(secondsRemaining)s"
         default:
-            return "Logging out in \(secondsRemaining)s"
+            return "Switching user in \(secondsRemaining)s"
         }
     }
 

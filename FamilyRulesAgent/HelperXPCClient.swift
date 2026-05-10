@@ -221,3 +221,10 @@ enum XPCClientError: LocalizedError {
         }
     }
 }
+
+extension XPCClientError {
+    static func loggable(_ error: Error, context: String) -> Error {
+        DiagnosticsLogger.record(error: error, context: context)
+        return error
+    }
+}

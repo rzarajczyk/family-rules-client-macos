@@ -8,5 +8,7 @@ struct FamilyRulesAgentApp: App {
         Settings {
             EmptyView()
         }
+
+
     }
 }

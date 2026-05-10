@@ -44,6 +44,7 @@ final class AllDevicesModel: ObservableObject {
             } catch {
                 guard !Task.isCancelled else { return }
                 errorMessage = error.localizedDescription
+                DiagnosticsLogger.record(error: error, context: "Failed to load all-devices usage")
             }
 
             isLoading = false

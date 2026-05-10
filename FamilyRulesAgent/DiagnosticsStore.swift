@@ -7,6 +7,7 @@ final class DiagnosticsStore: ObservableObject {
     @Published var helperConnectionState = "Idle"
     @Published var helperLastReply = "No ping yet"
     @Published var serviceManagementState = ServiceManagementBridge.registrationDescription()
+    @Published private(set) var logFileLocation = AgentPersistencePaths.diagnosticsLogURL.path(percentEncoded: false)
 
     func refreshServiceManagementState() {
         serviceManagementState = ServiceManagementBridge.registrationDescription()
@@ -23,8 +24,31 @@ final class DiagnosticsStore: ObservableObject {
             } catch {
                 helperConnectionState = "Failed"
                 helperLastReply = error.localizedDescription
+                DiagnosticsLogger.record(error: error, context: "Helper ping failed")
             }
         }
+    }
+}
+
+enum DiagnosticsLogger {
+    static func record(_ message: String) {
+        let line = "[\(timestamp())] \(message)"
+        try? DiagnosticsLogStore().append(line: line)
+    }
+
+    static func record(error: Error, context: String) {
+        record("ERROR: \(context): \(error.localizedDescription)")
+    }
+
+    private static let formatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.timeStyle = .medium
+        formatter.dateStyle = .none
+        return formatter
+    }()
+
+    private static func timestamp() -> String {
+        formatter.string(from: Date())
     }
 }
 

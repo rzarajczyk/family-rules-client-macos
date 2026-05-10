@@ -252,6 +252,8 @@ private actor HelperLifecycleClientStub: HelperLifecycleClientProtocol {
             return "Logout requested"
         case .terminateApp:
             return "Terminate requested for \(request.targetIdentifier ?? "unknown")"
+        case .switchUser:
+            return "Switch user requested"
         }
     }
 
@@ -267,6 +269,8 @@ private final class DeviceStateControllerStub: DeviceStateControlling {
     var statusDescription: String
     var countdownPresentation: StateCountdownPresentation?
     var restrictedAppBlockingEnabled = false
+    var shouldPresentCompactCountdown = false
+    var shouldEnforceSwitchUserLoop = false
 
     init(statusDescription: String, countdownPresentation: StateCountdownPresentation? = nil) {
         self.statusDescription = statusDescription

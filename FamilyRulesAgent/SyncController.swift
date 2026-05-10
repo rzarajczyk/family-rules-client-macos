@@ -228,6 +228,7 @@ final class SyncController: ObservableObject {
         } catch {
             syncStatus = "Error"
             lastErrorMessage = error.localizedDescription
+            DiagnosticsLogger.record(error: error, context: "Client-info request failed")
             recordLog("Client-info failed (\(reason)): \(error.localizedDescription)")
         }
     }
@@ -272,6 +273,7 @@ final class SyncController: ObservableObject {
         } catch {
             syncStatus = "Error"
             lastErrorMessage = error.localizedDescription
+            DiagnosticsLogger.record(error: error, context: "Usage report failed")
             recordLog("Report failed (\(reason)): \(error.localizedDescription)")
         }
     }
@@ -313,6 +315,7 @@ final class SyncController: ObservableObject {
             recordLog("Fetched blocked apps (\(reason)) count=\(apps.count)")
         } catch {
             lastErrorMessage = error.localizedDescription
+            DiagnosticsLogger.record(error: error, context: "Blocked-app fetch failed")
             recordLog("Blocked-app fetch failed (\(reason)): \(error.localizedDescription)")
         }
     }
@@ -383,6 +386,7 @@ final class SyncController: ObservableObject {
             // Command processing failures are recorded separately so they don't
             // degrade the sync health indicator set by a successful client-info or report.
             lastCommandErrorMessage = error.localizedDescription
+            DiagnosticsLogger.record(error: error, context: "Command processing failed")
             recordLog("Command processing failed (\(reason)): \(error.localizedDescription)")
         }
     }
@@ -432,6 +436,7 @@ final class SyncController: ObservableObject {
             try diagnosticsLogStore.append(line: line)
             recentLogLines = (try? diagnosticsLogStore.loadRecentLines(limit: 20)) ?? recentLogLines
         } catch {
+            DiagnosticsLogger.record(error: error, context: "Failed to append diagnostics log line")
             recentLogLines.insert(line, at: 0)
             if recentLogLines.count > 20 {
                 recentLogLines.removeLast(recentLogLines.count - 20)

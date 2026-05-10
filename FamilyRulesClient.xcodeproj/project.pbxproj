@@ -7,7 +7,10 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		A10000300000000000000008 /* AppIcon.icns in Resources */ = {isa = PBXBuildFile; fileRef = A10001310000000000000008 /* AppIcon.icns */; };
+		A10000310000000000000008 /* AppIconSource.png in Resources */ = {isa = PBXBuildFile; fileRef = A10001320000000000000008 /* AppIconSource.png */; };
 		A10000010000000000000001 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001010000000000000001 /* AppDelegate.swift */; };
+		A100000A0000000000000008 /* AppIconImage.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001330000000000000008 /* AppIconImage.swift */; };
 		A10000020000000000000001 /* DiagnosticsStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001020000000000000001 /* DiagnosticsStore.swift */; };
 		A10000030000000000000001 /* DiagnosticsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001030000000000000001 /* DiagnosticsView.swift */; };
 		A10000040000000000000001 /* FamilyRulesAgentApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001040000000000000001 /* FamilyRulesAgentApp.swift */; };
@@ -64,8 +67,8 @@
 		A10001060000000000000001 /* FamilyRulesHelperXPCProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FamilyRulesHelperXPCProtocol.swift; sourceTree = "<group>"; };
 		A10001070000000000000001 /* main.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = main.swift; sourceTree = "<group>"; };
 		A10001080000000000000001 /* FamilyRulesAgent-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "FamilyRulesAgent-Info.plist"; sourceTree = "<group>"; };
-		A10001090000000000000002 /* AppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModel.swift; sourceTree = "<group>"; };
 		A10001090000000000000001 /* FamilyRulesHelper-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "FamilyRulesHelper-Info.plist"; sourceTree = "<group>"; };
+		A10001090000000000000002 /* AppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModel.swift; sourceTree = "<group>"; };
 		A10001100000000000000001 /* FamilyRulesAgent.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = FamilyRulesAgent.entitlements; sourceTree = "<group>"; };
 		A10001100000000000000002 /* RegistrationClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RegistrationClient.swift; sourceTree = "<group>"; };
 		A10001110000000000000001 /* FamilyRulesHelper.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = FamilyRulesHelper.entitlements; sourceTree = "<group>"; };
@@ -80,7 +83,6 @@
 		A10001190000000000000003 /* ServerSyncClientTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerSyncClientTests.swift; sourceTree = "<group>"; };
 		A10001200000000000000003 /* SyncControllerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncControllerTests.swift; sourceTree = "<group>"; };
 		A10001210000000000000004 /* README.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = README.md; sourceTree = "<group>"; };
-		A10001220000000000000004 /* PLAN.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = PLAN.md; sourceTree = "<group>"; };
 		A10001230000000000000004 /* DashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardView.swift; sourceTree = "<group>"; };
 		A10001240000000000000005 /* LifecycleController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LifecycleController.swift; sourceTree = "<group>"; };
 		A10001250000000000000005 /* LifecycleControllerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LifecycleControllerTests.swift; sourceTree = "<group>"; };
@@ -89,9 +91,15 @@
 		A10001280000000000000006 /* DeviceStateControllerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceStateControllerTests.swift; sourceTree = "<group>"; };
 		A10001290000000000000007 /* AllDevicesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AllDevicesView.swift; sourceTree = "<group>"; };
 		A10001300000000000000007 /* AllDevicesModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AllDevicesModelTests.swift; sourceTree = "<group>"; };
+		A10001330000000000000008 /* AppIconImage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppIconImage.swift; sourceTree = "<group>"; };
+		A10001310000000000000008 /* AppIcon.icns */ = {isa = PBXFileReference; lastKnownFileType = image.icns; path = AppIcon.icns; sourceTree = "<group>"; };
+		A10001320000000000000008 /* AppIconSource.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = AppIconSource.png; sourceTree = "<group>"; };
 		A10002010000000000000001 /* FamilyRulesAgent.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = FamilyRulesAgent.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		A10002020000000000000001 /* FamilyRulesHelper.xpc */ = {isa = PBXFileReference; explicitFileType = "wrapper.xpc-service"; includeInIndex = 0; path = FamilyRulesHelper.xpc; sourceTree = BUILT_PRODUCTS_DIR; };
 		A10002030000000000000002 /* FamilyRulesAgentTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = FamilyRulesAgentTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		B5B60BCA2FAF8BD000C1AD99 /* 000-SPEC.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = "000-SPEC.md"; sourceTree = "<group>"; };
+		B5B60BCB2FAF8BE900C1AD99 /* 001.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = 001.md; sourceTree = "<group>"; };
+		B5B60BCC2FAF997400C1AD99 /* 002.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = 002.md; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -136,8 +144,10 @@
 		A10008020000000000000001 /* FamilyRulesAgent */ = {
 			isa = PBXGroup;
 			children = (
+				A10008090000000000000008 /* Resources */,
 				A10001150000000000000003 /* ActivityMonitor.swift */,
 				A10001290000000000000007 /* AllDevicesView.swift */,
+				A10001330000000000000008 /* AppIconImage.swift */,
 				A10001090000000000000002 /* AppModel.swift */,
 				A10001010000000000000001 /* AppDelegate.swift */,
 				A10001230000000000000004 /* DashboardView.swift */,
@@ -155,6 +165,15 @@
 				A10001170000000000000003 /* SyncController.swift */,
 			);
 			path = FamilyRulesAgent;
+			sourceTree = "<group>";
+		};
+		A10008090000000000000008 /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				A10001310000000000000008 /* AppIcon.icns */,
+				A10001320000000000000008 /* AppIconSource.png */,
+			);
+			path = Resources;
 			sourceTree = "<group>";
 		};
 		A10008030000000000000001 /* FamilyRulesHelper */ = {
@@ -212,8 +231,10 @@
 		A10008080000000000000004 /* Docs */ = {
 			isa = PBXGroup;
 			children = (
+				B5B60BCC2FAF997400C1AD99 /* 002.md */,
+				B5B60BCB2FAF8BE900C1AD99 /* 001.md */,
 				A10001210000000000000004 /* README.md */,
-				A10001220000000000000004 /* PLAN.md */,
+				B5B60BCA2FAF8BD000C1AD99 /* 000-SPEC.md */,
 			);
 			path = Docs;
 			sourceTree = "<group>";
@@ -318,6 +339,8 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				A10000300000000000000008 /* AppIcon.icns in Resources */,
+				A10000310000000000000008 /* AppIconSource.png in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -368,6 +391,7 @@
 			files = (
 				A10000160000000000000003 /* ActivityMonitor.swift in Sources */,
 				A10000280000000000000007 /* AllDevicesView.swift in Sources */,
+				A100000A0000000000000008 /* AppIconImage.swift in Sources */,
 				A10000090000000000000002 /* AppModel.swift in Sources */,
 				A10000010000000000000001 /* AppDelegate.swift in Sources */,
 				A10000220000000000000004 /* DashboardView.swift in Sources */,
@@ -476,6 +500,7 @@
 		A10014030000000000000001 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = Config/FamilyRulesAgent.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
@@ -504,6 +529,7 @@
 		A10014040000000000000001 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = Config/FamilyRulesAgent.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;

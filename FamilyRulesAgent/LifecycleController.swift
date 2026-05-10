@@ -9,6 +9,8 @@ protocol LifecycleControlling: AnyObject {
     var helperStatusDescription: String { get }
     var countdownPresentation: StateCountdownPresentation? { get }
     var restrictedAppBlockingEnabled: Bool { get }
+    var shouldPresentCompactCountdown: Bool { get }
+    var shouldEnforceSwitchUserLoop: Bool { get }
     func start(registration: RegistrationRecord)
     func updateServerDeviceState(_ rawState: String, extra: String?)
     func performRestrictedAppFallbackTermination(targetIdentifier: String) async -> Bool
@@ -40,6 +42,14 @@ final class LifecycleController: ObservableObject, LifecycleControlling {
 
     var restrictedAppBlockingEnabled: Bool {
         deviceStateController.restrictedAppBlockingEnabled
+    }
+
+    var shouldPresentCompactCountdown: Bool {
+        deviceStateController.shouldPresentCompactCountdown
+    }
+
+    var shouldEnforceSwitchUserLoop: Bool {
+        deviceStateController.shouldEnforceSwitchUserLoop
     }
 
     private let helperClient: any HelperLifecycleClientProtocol
@@ -79,6 +89,7 @@ final class LifecycleController: ObservableObject, LifecycleControlling {
         do {
             loginItemStatusDescription = try loginItemRegistrar()
         } catch {
+            DiagnosticsLogger.record(error: error, context: "Failed to register login item")
             loginItemStatusDescription = error.localizedDescription
         }
 
@@ -144,6 +155,7 @@ final class LifecycleController: ObservableObject, LifecycleControlling {
             helperStatusDescription = reply
             return true
         } catch {
+            DiagnosticsLogger.record(error: error, context: "Restricted app fallback termination failed")
             helperStatusDescription = error.localizedDescription
             return false
         }
@@ -156,6 +168,7 @@ final class LifecycleController: ObservableObject, LifecycleControlling {
             let status = try await helperClient.fetchLifecycleStatus()
             helperStatusDescription = helperDescription(from: status)
         } catch {
+            DiagnosticsLogger.record(error: error, context: "Failed to refresh lifecycle diagnostics")
             helperStatusDescription = error.localizedDescription
         }
     }
@@ -185,6 +198,7 @@ final class LifecycleController: ObservableObject, LifecycleControlling {
                 helperStatusDescription = helperReply
             }
         } catch {
+            DiagnosticsLogger.record(error: error, context: "Failed to update helper status")
             helperStatusDescription = error.localizedDescription
         }
     }

@@ -3,6 +3,14 @@ import XCTest
 
 final class UsageAccumulatorTests: XCTestCase {
 
+    override func tearDownWithError() throws {
+        try super.tearDownWithError()
+        let tempRoot = FileManager.default.temporaryDirectory.appendingPathComponent("FamilyRulesAgentTests", isDirectory: true)
+        if FileManager.default.fileExists(atPath: tempRoot.path) {
+            try FileManager.default.removeItem(at: tempRoot)
+        }
+    }
+
     // MARK: - Foreground accumulation
 
     func testAccumulatesScreenAndForegroundTimeWhileActive() {
@@ -175,5 +183,82 @@ final class UsageAccumulatorTests: XCTestCase {
         XCTAssertEqual(snapshot.applications["com.apple.finder"], 10)
         XCTAssertNil(snapshot.visibleApplications["com.apple.finder"])
         XCTAssertTrue(snapshot.visibleApps.isEmpty)
+    }
+
+    func testRestoresPersistedDailyTotalsOnRestart() {
+        let start = Date(timeIntervalSince1970: 1_000)
+        let persistedState = PersistedUsageState(
+            dayStart: Calendar.current.startOfDay(for: start),
+            screenTimeSeconds: 42,
+            applicationUsageSeconds: ["com.apple.finder": 15],
+            visibleApplicationUsageSeconds: ["com.apple.finder": 12],
+            knownApps: ["com.apple.finder": KnownAppInfo(identifier: "com.apple.finder", name: "Finder")]
+        )
+        var accumulator = UsageAccumulator(
+            now: start,
+            currentApp: KnownAppInfo(identifier: "com.apple.finder", name: "Finder"),
+            persistedState: persistedState
+        )
+
+        let snapshot = accumulator.snapshot(at: start.addingTimeInterval(8))
+
+        XCTAssertEqual(snapshot.screenTimeSeconds, 50)
+        XCTAssertEqual(snapshot.applications["com.apple.finder"], 23)
+        XCTAssertEqual(snapshot.visibleApplications["com.apple.finder"], 20)
+    }
+
+    func testIgnoresPersistedTotalsFromPreviousDay() {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+
+        let start = Date(timeIntervalSince1970: 172_800)
+        let persistedState = PersistedUsageState(
+            dayStart: Date(timeIntervalSince1970: 86_400),
+            screenTimeSeconds: 120,
+            applicationUsageSeconds: ["com.apple.finder": 120],
+            visibleApplicationUsageSeconds: ["com.apple.finder": 120],
+            knownApps: ["com.apple.finder": KnownAppInfo(identifier: "com.apple.finder", name: "Finder")]
+        )
+        var accumulator = UsageAccumulator(
+            now: start,
+            calendar: calendar,
+            currentApp: KnownAppInfo(identifier: "com.apple.finder", name: "Finder"),
+            persistedState: persistedState
+        )
+
+        let snapshot = accumulator.snapshot(at: start.addingTimeInterval(10))
+
+        XCTAssertEqual(snapshot.screenTimeSeconds, 10)
+        XCTAssertEqual(snapshot.applications["com.apple.finder"], 10)
+        XCTAssertNil(snapshot.visibleApplications["com.apple.finder"])
+    }
+
+    func testSQLiteUsageStoreRoundTripsPersistedState() throws {
+        let tempRoot = FileManager.default.temporaryDirectory
+            .appendingPathComponent("FamilyRulesAgentTests", isDirectory: true)
+        try FileManager.default.createDirectory(at: tempRoot, withIntermediateDirectories: true)
+        let databaseURL = tempRoot.appendingPathComponent("Usage.sqlite3")
+        let store = SQLiteUsageStore(databaseURL: databaseURL)
+        let dayStart = Calendar.current.startOfDay(for: Date(timeIntervalSince1970: 10_000))
+        let state = PersistedUsageState(
+            dayStart: dayStart,
+            screenTimeSeconds: 61,
+            applicationUsageSeconds: [
+                "com.apple.finder": 30,
+                "com.apple.safari": 31,
+            ],
+            visibleApplicationUsageSeconds: [
+                "com.apple.finder": 61,
+            ],
+            knownApps: [
+                "com.apple.finder": KnownAppInfo(identifier: "com.apple.finder", name: "Finder"),
+                "com.apple.safari": KnownAppInfo(identifier: "com.apple.safari", name: "Safari"),
+            ]
+        )
+
+        try store.save(state)
+        let loaded = try store.load(dayStart: dayStart)
+
+        XCTAssertEqual(loaded, state)
     }
 }

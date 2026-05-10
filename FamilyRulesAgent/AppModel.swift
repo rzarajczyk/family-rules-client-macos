@@ -29,6 +29,7 @@ final class AppModel: ObservableObject {
         } catch {
             registration = nil
             startupErrorMessage = error.localizedDescription
+            DiagnosticsLogger.record(error: error, context: "Failed to load saved registration")
         }
     }
 
@@ -71,6 +72,7 @@ final class AppModel: ObservableObject {
             log("Unregistered instance \(registration.instanceId) on server")
         } catch {
             serverErrorMessage = error.localizedDescription
+            DiagnosticsLogger.record(error: error, context: "Failed to unregister instance \(registration.instanceId) on server")
             log("Failed to unregister instance \(registration.instanceId) on server: \(error.localizedDescription)")
         }
 
@@ -83,6 +85,7 @@ final class AppModel: ObservableObject {
             return RegistrationCleanupResult(serverErrorMessage: serverErrorMessage, localCleanupErrorMessage: nil)
         } catch {
             startupErrorMessage = error.localizedDescription
+            DiagnosticsLogger.record(error: error, context: "Failed to clear local registration state")
             log("Failed to clear local registration state: \(error.localizedDescription)")
             return RegistrationCleanupResult(serverErrorMessage: serverErrorMessage, localCleanupErrorMessage: error.localizedDescription)
         }

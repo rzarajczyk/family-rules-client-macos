@@ -97,6 +97,7 @@ struct SetupView: View {
                 onRegistrationCompleted()
             } catch {
                 errorMessage = error.localizedDescription
+                DiagnosticsLogger.record(error: error, context: "Registration failed from setup view")
                 isRegistering = false
             }
         }

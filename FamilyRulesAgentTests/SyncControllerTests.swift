@@ -612,6 +612,8 @@ private final class LifecycleControllerStub: LifecycleControlling {
     private(set) var helperStatusDescription = "Unknown"
     private(set) var countdownPresentation: StateCountdownPresentation?
     private(set) var restrictedAppBlockingEnabled = false
+    private(set) var shouldPresentCompactCountdown = false
+    private(set) var shouldEnforceSwitchUserLoop = false
 
     func start(registration: RegistrationRecord) {
         statusDescription = "Protected"
