@@ -43,6 +43,15 @@ struct RestrictedAppEnforcementState {
     }
 }
 
+private final class BlockingPanel: NSPanel {
+    override var canBecomeKey: Bool { true }
+    override var canBecomeMain: Bool { true }
+
+    override func performClose(_ sender: Any?) {}
+
+    override func miniaturize(_ sender: Any?) {}
+}
+
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     let appModel: AppModel
@@ -63,6 +72,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var switchUserEnforcementTask: Task<Void, Never>?
     private var stateWindowControllers: [NSWindowController] = []
     private var refreshTask: Task<Void, Never>?
+    private var temporaryStateTask: Task<Void, Never>?
+    private var temporaryBlockedApp: BlockedAppPayload?
     private var restrictedAppEnforcementState = RestrictedAppEnforcementState()
     /// Tracks when the All My Devices data was last fetched so we avoid firing a
     /// network request every time the menu item is clicked while data is fresh.
@@ -118,6 +129,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 onOpenDiagnostics: { [weak self] in self?.openDiagnosticsWindow() },
                 onOpenSetup: { [weak self] in self?.openSetupWindow() },
                 onPingHelper: { [weak self] in self?.pingHelper() },
+                onTestSwitchUser: { [weak self] in self?.startSwitchUserTest() },
+                onTestLockScreen: { [weak self] in self?.startLockScreenTest() },
+                onTestBlockRestrictedApps: { [weak self] in self?.startBlockRestrictedAppsTest() },
                 onUnregister: { [weak self] in self?.unregisterThisMac() },
                 onDebugQuit: debugQuitAction
             ))
@@ -236,21 +250,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     private func updateStateWindow() {
         let snapshot = activityMonitor.snapshot()
+        let lockScreenActive = lifecycleController.normalizedState == "LOCK_SCREEN"
+        let blockedAppIdentifiers = syncController.blockedAppIdentifiers.union(temporaryBlockedApp.map { [$0.appPath] } ?? [])
+        let blockedAppNames = syncController.blockedAppNames.merging(temporaryBlockedApp.map { [$0.appPath: $0.appName ?? $0.appPath] } ?? [:]) { _, new in new }
         let restrictedAppIdentifier = restrictedAppEnforcementState.reconcile(
             restrictedAppBlockingEnabled: lifecycleController.restrictedAppBlockingEnabled,
             frontmostAppIdentifier: snapshot.activeApps.first,
             visibleAppIdentifiers: snapshot.visibleApps,
-            blockedAppIdentifiers: syncController.blockedAppIdentifiers
+            blockedAppIdentifiers: blockedAppIdentifiers
         )
 
         let restrictedAppPresentation = restrictedAppIdentifier.map {
             RestrictedAppOverlayPresentation(
                 appIdentifier: $0,
-                appName: syncController.blockedAppNames[$0] ?? snapshot.knownApps[$0]?.name ?? $0
+                appName: blockedAppNames[$0] ?? snapshot.knownApps[$0]?.name ?? $0
             )
         }
 
-        let shouldShow = lifecycleController.countdownPresentation != nil || restrictedAppPresentation != nil
+        let shouldShow = lockScreenActive || lifecycleController.countdownPresentation != nil || restrictedAppPresentation != nil
 
         if shouldShow {
             let screens = NSScreen.screens
@@ -260,7 +277,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 guard let window = wc.window else { continue }
 
                 let shouldRetain: Bool
-                if lifecycleController.shouldPresentCompactCountdown {
+                if lockScreenActive {
+                    shouldRetain = screenContaining(window: window, screens: screens) != nil
+                } else if lifecycleController.shouldPresentCompactCountdown {
                     shouldRetain = compactCountdownScreen(for: window, screens: screens) != nil
                 } else {
                     shouldRetain = screens.contains { $0.frame == window.frame }
@@ -276,9 +295,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             // Add a window for any screen that does not yet have one.
             let targetScreens = screens
             for screen in targetScreens {
-                let targetFrame = lifecycleController.shouldPresentCompactCountdown ? compactCountdownFrame(for: screen) : screen.frame
+                let targetFrame = lockScreenActive ? screen.frame : (lifecycleController.shouldPresentCompactCountdown ? compactCountdownFrame(for: screen) : screen.frame)
                 let alreadyCovered = stateWindowControllers.contains { controller in
                     guard let window = controller.window else { return false }
+                    if lockScreenActive {
+                        return screenContaining(window: window, screens: screens) == screen
+                    }
+
                     if lifecycleController.shouldPresentCompactCountdown {
                         return compactCountdownScreen(for: window, screens: screens) == screen
                     }
@@ -289,44 +312,53 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                     let hostingController = NSHostingController(rootView: StateOverlayView(
                         countdownPresentation: lifecycleController.countdownPresentation,
                         restrictedAppPresentation: restrictedAppPresentation,
+                        lockScreenActive: lockScreenActive,
                         compactCountdown: lifecycleController.shouldPresentCompactCountdown,
                         onMinimizeAllWindows: { [weak self] in self?.handleMinimizeRestrictedAppWindows() }
                     ))
-                    let window = NSPanel(contentViewController: hostingController)
+                    let window = BlockingPanel(contentViewController: hostingController)
                     window.titleVisibility = .hidden
                     window.titlebarAppearsTransparent = true
-                    window.styleMask = lifecycleController.shouldPresentCompactCountdown ? [.borderless, .nonactivatingPanel] : [.borderless]
-                    window.level = stateWindowLevel(compactCountdown: lifecycleController.shouldPresentCompactCountdown)
-                    window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
-                    window.backgroundColor = .clear
-                    window.isOpaque = false
+                    window.styleMask = lockScreenActive ? [.borderless] : (lifecycleController.shouldPresentCompactCountdown ? [.borderless, .nonactivatingPanel] : [.borderless])
+                    window.level = stateWindowLevel(compactCountdown: lifecycleController.shouldPresentCompactCountdown, lockScreen: lockScreenActive)
+                    window.collectionBehavior = lockScreenActive ? [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary, .ignoresCycle] : [.canJoinAllSpaces, .fullScreenAuxiliary]
+                    window.backgroundColor = lockScreenActive ? .black : .clear
+                    window.isOpaque = lockScreenActive
                     window.hidesOnDeactivate = false
                     window.ignoresMouseEvents = false
                     window.setFrame(targetFrame, display: true)
-                    window.isMovableByWindowBackground = lifecycleController.shouldPresentCompactCountdown
+                    window.isMovableByWindowBackground = lifecycleController.shouldPresentCompactCountdown && !lockScreenActive
                     window.isReleasedWhenClosed = false
                     let wc = NSWindowController(window: window)
                     stateWindowControllers.append(wc)
                 }
             }
             // Update content and show all overlay windows.
-            let title = lifecycleController.countdownPresentation?.title ?? restrictedAppPresentation?.appName ?? "FamilyRules"
+            let title = lockScreenActive ? "FamilyRules Locked" : (lifecycleController.countdownPresentation?.title ?? restrictedAppPresentation?.appName ?? "FamilyRules")
             for wc in stateWindowControllers {
                 if let hc = wc.contentViewController as? NSHostingController<StateOverlayView> {
                     hc.rootView = StateOverlayView(
                         countdownPresentation: lifecycleController.countdownPresentation,
                         restrictedAppPresentation: restrictedAppPresentation,
+                        lockScreenActive: lockScreenActive,
                         compactCountdown: lifecycleController.shouldPresentCompactCountdown,
                         onMinimizeAllWindows: { [weak self] in self?.handleMinimizeRestrictedAppWindows() }
                     )
                 }
                 wc.window?.title = title
-                wc.window?.level = stateWindowLevel(compactCountdown: lifecycleController.shouldPresentCompactCountdown)
-                if !lifecycleController.shouldPresentCompactCountdown,
+                wc.window?.level = stateWindowLevel(compactCountdown: lifecycleController.shouldPresentCompactCountdown, lockScreen: lockScreenActive)
+                if !lockScreenActive,
+                   !lifecycleController.shouldPresentCompactCountdown,
                    let screen = screenContaining(window: wc.window, screens: screens) {
                     wc.window?.setFrame(screen.frame, display: true)
                 }
-                wc.window?.orderFrontRegardless()
+                if lockScreenActive {
+                    wc.window?.orderFrontRegardless()
+                    wc.window?.makeKeyAndOrderFront(nil)
+                    NSApp.activate(ignoringOtherApps: true)
+                } else {
+                    wc.window?.orderFrontRegardless()
+                }
             }
         } else {
             stateWindowControllers.forEach { $0.window?.close() }
@@ -390,6 +422,47 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         allDevicesModel.refresh(registration: appModel.registration)
         openDiagnosticsWindow()
         openDashboardWindow()
+    }
+
+    private func startSwitchUserTest() {
+        startTemporaryStateTest(rawState: "LOGOUT_WITH_TIMEOUT", extra: "31", durationSeconds: 30)
+    }
+
+    private func startLockScreenTest() {
+        startTemporaryStateTest(rawState: "LOCK_SCREEN", extra: nil, durationSeconds: 30)
+    }
+
+    private func startBlockRestrictedAppsTest() {
+        let snapshot = activityMonitor.snapshot()
+        let targetIdentifier = snapshot.activeApps.first
+            ?? snapshot.visibleApps.first
+            ?? snapshot.knownApps.keys.sorted().first
+
+        let blockedApp = targetIdentifier.map {
+            BlockedAppPayload(appPath: $0, appName: snapshot.knownApps[$0]?.name)
+        }
+
+        startTemporaryStateTest(rawState: "BLOCK_RESTRICTED_APPS", extra: nil, durationSeconds: 30, blockedApp: blockedApp)
+    }
+
+    private func startTemporaryStateTest(rawState: String, extra: String?, durationSeconds: Int, blockedApp: BlockedAppPayload? = nil) {
+        temporaryStateTask?.cancel()
+        temporaryBlockedApp = blockedApp
+        lifecycleController.updateServerDeviceState(rawState, extra: extra)
+        refreshMenuStatusItems()
+
+        temporaryStateTask = Task { @MainActor [weak self] in
+            do {
+                try await Task.sleep(for: .seconds(durationSeconds))
+            } catch {
+                return
+            }
+
+            guard let self else { return }
+            self.temporaryBlockedApp = nil
+            self.lifecycleController.updateServerDeviceState("ACTIVE", extra: nil)
+            self.refreshMenuStatusItems()
+        }
     }
 
 #if DEBUG
@@ -508,8 +581,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         )
     }
 
-    private func stateWindowLevel(compactCountdown: Bool) -> NSWindow.Level {
-        compactCountdown ? NSWindow.Level(rawValue: NSWindow.Level.screenSaver.rawValue + 1) : .screenSaver
+    private func stateWindowLevel(compactCountdown: Bool, lockScreen: Bool) -> NSWindow.Level {
+        if lockScreen {
+            return NSWindow.Level(rawValue: NSWindow.Level.screenSaver.rawValue + 2)
+        }
+
+        return compactCountdown ? NSWindow.Level(rawValue: NSWindow.Level.screenSaver.rawValue + 1) : .screenSaver
     }
 
     private func screenContaining(window: NSWindow?, screens: [NSScreen]) -> NSScreen? {
@@ -533,7 +610,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             switchUserEnforcementTask = Task { @MainActor [weak self] in
                 while let self, !Task.isCancelled, self.lifecycleController.shouldEnforceSwitchUserLoop {
                     do {
-                        _ = try await HelperXPCClient().executeDeviceAction(HelperDeviceActionRequest(action: .switchUser, requestedAt: Date()))
+                        if try SessionActionExecutor.execute(.switchUser) == nil {
+                            _ = try await HelperXPCClient().executeDeviceAction(HelperDeviceActionRequest(action: .switchUser, requestedAt: Date()))
+                        }
                     } catch {
                         DiagnosticsLogger.record(error: error, context: "Failed to enforce switch-user loop")
                     }

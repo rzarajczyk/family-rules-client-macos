@@ -52,6 +52,10 @@ final class LifecycleController: ObservableObject, LifecycleControlling {
         deviceStateController.shouldEnforceSwitchUserLoop
     }
 
+    var normalizedState: String {
+        deviceStateController.normalizedState
+    }
+
     private let helperClient: any HelperLifecycleClientProtocol
     private let deviceStateController: any DeviceStateControlling
     private let bundleIdentifierProvider: () -> String

@@ -17,6 +17,9 @@ struct DashboardView: View {
     let onOpenDiagnostics: () -> Void
     let onOpenSetup: () -> Void
     let onPingHelper: () -> Void
+    let onTestSwitchUser: () -> Void
+    let onTestLockScreen: () -> Void
+    let onTestBlockRestrictedApps: () -> Void
     let onUnregister: () -> Void
     #if DEBUG
     let onDebugQuit: (() -> Void)?
@@ -124,6 +127,11 @@ struct DashboardView: View {
                     Button("Open Diagnostics", action: onOpenDiagnostics)
                     Button("Open Setup", action: onOpenSetup)
                     Button("Ping Helper", action: onPingHelper)
+                    Divider()
+                    Button("Test Switch User (30s)", action: onTestSwitchUser)
+                    Button("Test Lock Screen (30s)", action: onTestLockScreen)
+                    Button("Test Block Restricted Apps (30s)", action: onTestBlockRestrictedApps)
+                    Divider()
                     Button("Unregister This Mac", role: .destructive, action: onUnregister)
                     if let onDebugQuit {
                         Divider()

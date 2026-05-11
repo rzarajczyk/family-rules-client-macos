@@ -23,8 +23,8 @@ enum AppIconImage {
         if blockingEnabled {
             let badgeDiameter = min(size.width, size.height) * 0.56
             let badgeRect = NSRect(
-                x: size.width - badgeDiameter,
-                y: size.height - badgeDiameter,
+                x: (size.width - badgeDiameter) / 2,
+                y: (size.height - badgeDiameter) / 2,
                 width: badgeDiameter,
                 height: badgeDiameter
             )

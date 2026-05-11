@@ -86,8 +86,6 @@ enum LifecycleStateBridge {
 
     static func helperAction(for rawValue: String) -> HelperDeviceAction? {
         switch normalize(rawValue) {
-        case "LOCK_SCREEN", "LOCK_SCREEN_WITH_TIMEOUT":
-            return .lockScreen
         case "LOGOUT", "LOGOUT_WITH_TIMEOUT":
             return .switchUser
         default:

@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 struct RestrictedAppOverlayPresentation: Equatable {
@@ -8,18 +9,21 @@ struct RestrictedAppOverlayPresentation: Equatable {
 struct StateOverlayView: View {
     let countdownPresentation: StateCountdownPresentation?
     let restrictedAppPresentation: RestrictedAppOverlayPresentation?
+    let lockScreenActive: Bool
     let compactCountdown: Bool
     let onMinimizeAllWindows: (() -> Void)?
 
     var body: some View {
         Group {
-            if countdownPresentation != nil || restrictedAppPresentation != nil {
+            if lockScreenActive || countdownPresentation != nil || restrictedAppPresentation != nil {
                 ZStack {
-                    if let restrictedAppPresentation {
+                    if lockScreenActive {
+                        lockScreenView
+                    } else if let restrictedAppPresentation {
                         restrictedAppView(restrictedAppPresentation)
                     }
 
-                    if let countdownPresentation {
+                    if let countdownPresentation, !lockScreenActive {
                         countdownView(countdownPresentation)
                             .zIndex(1)
                     }
@@ -123,6 +127,38 @@ struct StateOverlayView: View {
         .background(
             LinearGradient(
                 colors: [Color(red: 0.40, green: 0.08, blue: 0.14), Color(red: 0.85, green: 0.29, blue: 0.16)],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+        )
+    }
+
+    private var lockScreenView: some View {
+        VStack(spacing: 28) {
+            if let icon = AppIconImage.load() {
+                Image(nsImage: icon)
+                    .resizable()
+                    .interpolation(.high)
+                    .scaledToFit()
+                    .frame(width: 128, height: 128)
+                    .shadow(color: .black.opacity(0.22), radius: 18, y: 8)
+            }
+
+            Text("This Mac is locked")
+                .font(.system(size: 38, weight: .bold, design: .rounded))
+                .foregroundStyle(.white)
+
+            Text("FamilyRules has temporarily locked this device. Ask a parent to unlock it to continue.")
+                .font(.system(size: 22, weight: .medium, design: .rounded))
+                .multilineTextAlignment(.center)
+                .foregroundStyle(.white.opacity(0.92))
+                .frame(maxWidth: 760)
+        }
+        .padding(48)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(
+            LinearGradient(
+                colors: [Color(red: 0.10, green: 0.05, blue: 0.16), Color(red: 0.50, green: 0.07, blue: 0.12)],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
             )

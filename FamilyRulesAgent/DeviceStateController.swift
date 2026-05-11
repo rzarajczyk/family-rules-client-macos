@@ -22,6 +22,7 @@ final class DeviceStateController: ObservableObject, DeviceStateControlling {
     @Published private(set) var shouldEnforceSwitchUserLoop = false
 
     private let helperClient: any HelperLifecycleClientProtocol
+    private let sessionActionExecutor: (HelperDeviceAction) throws -> String?
     private let countdownDurationProvider: (String, String?) -> Int
     private let sleep: @Sendable (Int) async throws -> Void
     private let now: () -> Date
@@ -33,12 +34,14 @@ final class DeviceStateController: ObservableObject, DeviceStateControlling {
 
     init(
         helperClient: any HelperLifecycleClientProtocol = HelperXPCClient(),
+        sessionActionExecutor: @escaping (HelperDeviceAction) throws -> String? = SessionActionExecutor.execute,
         countdownDurationProvider: @escaping (String, String?) -> Int = DeviceStateController.defaultCountdownDuration,
         sleep: @escaping @Sendable (Int) async throws -> Void = { seconds in
             try await Task.sleep(for: .seconds(seconds))
         }
     ) {
         self.helperClient = helperClient
+        self.sessionActionExecutor = sessionActionExecutor
         self.countdownDurationProvider = countdownDurationProvider
         self.sleep = sleep
         self.now = Date.init
@@ -46,11 +49,13 @@ final class DeviceStateController: ObservableObject, DeviceStateControlling {
 
     init(
         helperClient: any HelperLifecycleClientProtocol,
+        sessionActionExecutor: @escaping (HelperDeviceAction) throws -> String? = SessionActionExecutor.execute,
         countdownDurationProvider: @escaping (String, String?) -> Int,
         sleep: @escaping @Sendable (Int) async throws -> Void,
         now: @escaping () -> Date
     ) {
         self.helperClient = helperClient
+        self.sessionActionExecutor = sessionActionExecutor
         self.countdownDurationProvider = countdownDurationProvider
         self.sleep = sleep
         self.now = now
@@ -84,8 +89,7 @@ final class DeviceStateController: ObservableObject, DeviceStateControlling {
             statusDescription = "Blocking Restricted Apps"
             restrictedAppBlockingEnabled = true
         case "LOCK_SCREEN":
-            statusDescription = "Locking Screen"
-            executeHelperAction(for: normalized)
+            statusDescription = "Screen Locked"
         case "LOGOUT":
             statusDescription = "Switching User"
             shouldEnforceSwitchUserLoop = true
@@ -157,8 +161,7 @@ final class DeviceStateController: ObservableObject, DeviceStateControlling {
                 self.restrictedAppBlockingEnabled = true
             case "LOCK_SCREEN_WITH_TIMEOUT":
                 self.normalizedState = "LOCK_SCREEN"
-                self.statusDescription = "Locking Screen"
-                self.executeHelperAction(for: "LOCK_SCREEN")
+                self.statusDescription = "Screen Locked"
             case "LOGOUT_WITH_TIMEOUT":
                 self.normalizedState = "LOGOUT"
                 self.statusDescription = "Switching User"
@@ -201,10 +204,15 @@ final class DeviceStateController: ObservableObject, DeviceStateControlling {
 
         executionTask = Task { [weak self] in
             guard let self else { return }
-            let request = HelperDeviceActionRequest(action: action, requestedAt: Date())
 
             do {
-                let reply = try await self.helperClient.executeDeviceAction(request)
+                let reply: String
+                if let localReply = try self.sessionActionExecutor(action) {
+                    reply = localReply
+                } else {
+                    let request = HelperDeviceActionRequest(action: action, requestedAt: Date())
+                    reply = try await self.helperClient.executeDeviceAction(request)
+                }
                 self.statusDescription = reply
             } catch {
                 DiagnosticsLogger.record(error: error, context: "Failed to execute helper action \(action.rawValue)")

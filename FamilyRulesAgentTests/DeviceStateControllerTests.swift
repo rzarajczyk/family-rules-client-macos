@@ -3,7 +3,7 @@ import XCTest
 
 @MainActor
 final class DeviceStateControllerTests: XCTestCase {
-    func testLegacyLockCountdownStateNormalizesAndExecutesHelperAction() async throws {
+    func testLegacyLockCountdownStateNormalizesWithoutExecutingHelperAction() async throws {
         let helperClient = HelperLifecycleClientActionStub()
         let controller = DeviceStateController(
             helperClient: helperClient,
@@ -12,13 +12,13 @@ final class DeviceStateControllerTests: XCTestCase {
         )
 
         controller.apply(rawState: "LOCKED_WITH_COUNTDOWN", extra: nil)
-        try await waitForRequestCount(helperClient, count: 1)
+        try await Task.sleep(for: .milliseconds(50))
 
         XCTAssertEqual(controller.normalizedState, "LOCK_SCREEN")
-        XCTAssertEqual(controller.statusDescription, "Lock requested")
+        XCTAssertEqual(controller.statusDescription, "Screen Locked")
         XCTAssertNil(controller.countdownPresentation)
         let requests = await helperClient.recordedRequests()
-        XCTAssertEqual(requests.map(\.action), [.lockScreen])
+        XCTAssertTrue(requests.isEmpty)
     }
 
     func testLogoutCountdownUsesExtraValueWhenPresent() async throws {

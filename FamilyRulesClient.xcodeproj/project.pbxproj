@@ -10,6 +10,7 @@
 		A10000300000000000000008 /* AppIcon.icns in Resources */ = {isa = PBXBuildFile; fileRef = A10001310000000000000008 /* AppIcon.icns */; };
 		A10000310000000000000008 /* AppIconSource.png in Resources */ = {isa = PBXBuildFile; fileRef = A10001320000000000000008 /* AppIconSource.png */; };
 		A10000010000000000000001 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001010000000000000001 /* AppDelegate.swift */; };
+		A100000B0000000000000008 /* SessionActionExecutor.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001340000000000000008 /* SessionActionExecutor.swift */; };
 		A100000A0000000000000008 /* AppIconImage.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001330000000000000008 /* AppIconImage.swift */; };
 		A10000020000000000000001 /* DiagnosticsStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001020000000000000001 /* DiagnosticsStore.swift */; };
 		A10000030000000000000001 /* DiagnosticsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001030000000000000001 /* DiagnosticsView.swift */; };
@@ -92,6 +93,7 @@
 		A10001290000000000000007 /* AllDevicesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AllDevicesView.swift; sourceTree = "<group>"; };
 		A10001300000000000000007 /* AllDevicesModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AllDevicesModelTests.swift; sourceTree = "<group>"; };
 		A10001330000000000000008 /* AppIconImage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppIconImage.swift; sourceTree = "<group>"; };
+		A10001340000000000000008 /* SessionActionExecutor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionActionExecutor.swift; sourceTree = "<group>"; };
 		A10001310000000000000008 /* AppIcon.icns */ = {isa = PBXFileReference; lastKnownFileType = image.icns; path = AppIcon.icns; sourceTree = "<group>"; };
 		A10001320000000000000008 /* AppIconSource.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = AppIconSource.png; sourceTree = "<group>"; };
 		A10002010000000000000001 /* FamilyRulesAgent.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = FamilyRulesAgent.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -158,6 +160,7 @@
 				A10001050000000000000001 /* HelperXPCClient.swift */,
 				A10001240000000000000005 /* LifecycleController.swift */,
 				A10001100000000000000002 /* RegistrationClient.swift */,
+				A10001340000000000000008 /* SessionActionExecutor.swift */,
 				A10001110000000000000002 /* RegistrationStore.swift */,
 				A10001160000000000000003 /* ServerSyncClient.swift */,
 				A10001120000000000000002 /* SetupView.swift */,
@@ -403,6 +406,7 @@
 				A10000230000000000000005 /* LifecycleController.swift in Sources */,
 				A10000060000000000000001 /* FamilyRulesHelperXPCProtocol.swift in Sources */,
 				A10000100000000000000002 /* RegistrationClient.swift in Sources */,
+				A100000B0000000000000008 /* SessionActionExecutor.swift in Sources */,
 				A10000110000000000000002 /* RegistrationStore.swift in Sources */,
 				A10000170000000000000003 /* ServerSyncClient.swift in Sources */,
 				A10000120000000000000002 /* SetupView.swift in Sources */,

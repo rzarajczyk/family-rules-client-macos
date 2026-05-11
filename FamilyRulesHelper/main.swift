@@ -1,5 +1,6 @@
 import AppKit
 import Foundation
+import Darwin
 
 final class HelperDelegate: NSObject, NSXPCListenerDelegate, FamilyRulesHelperXPCProtocol, @unchecked Sendable {
     private let listener = NSXPCListener.service()
@@ -140,21 +141,19 @@ final class HelperDelegate: NSObject, NSXPCListenerDelegate, FamilyRulesHelperXP
     private func performDeviceAction(_ action: HelperDeviceAction, targetIdentifier: String?) throws -> String {
         switch action {
         case .lockScreen:
-            let process = Process()
-            process.executableURL = URL(fileURLWithPath: "/System/Library/CoreServices/RemoteManagement/AppleVNCServer.bundle/Contents/Support/LockScreen.app/Contents/MacOS/LockScreen")
-            try process.run()
+            try requestScreenLockViaLoginFramework(actionName: "LOCK_SCREEN")
             return "Lock requested"
         case .logout:
-            let process = Process()
-            process.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
-            process.arguments = ["-e", "tell application \"System Events\" to log out"]
-            try process.run()
+            try runLoggedCommand(
+                actionName: "LOGOUT",
+                executableURL: URL(fileURLWithPath: "/usr/bin/osascript"),
+                arguments: ["-e", "tell application \"System Events\" to log out"]
+            )
             return "Logout requested"
         case .switchUser:
-            let process = Process()
-            process.executableURL = URL(fileURLWithPath: "/System/Library/CoreServices/loginwindow.app/Contents/MacOS/loginwindow")
-            process.arguments = [">switch-user"]
-            try process.run()
+            // Match the legacy macOS client behavior: force the current session
+            // into the lock/login UI instead of relying on fragile loginwindow CLI args.
+            try requestScreenLockViaLoginFramework(actionName: "SWITCH_USER")
             return "Switch user requested"
         case .terminateApp:
             guard let targetIdentifier, !targetIdentifier.isEmpty else {
@@ -172,6 +171,95 @@ final class HelperDelegate: NSObject, NSXPCListenerDelegate, FamilyRulesHelperXP
 
             return "Terminate requested for \(targetIdentifier)"
         }
+    }
+
+    private func requestScreenLockViaLoginFramework(actionName: String) throws {
+        var callError: Error?
+        let invoke = {
+            do {
+                try self.invokeScreenLockViaLoginFramework(actionName: actionName)
+            } catch {
+                callError = error
+            }
+        }
+
+        if Thread.isMainThread {
+            invoke()
+        } else {
+            DispatchQueue.main.sync(execute: invoke)
+        }
+
+        if let callError {
+            throw callError
+        }
+    }
+
+    private func invokeScreenLockViaLoginFramework(actionName: String) throws {
+        let frameworkPath = "/System/Library/PrivateFrameworks/login.framework/Versions/Current/login"
+        DiagnosticsLogger.record("Helper action \(actionName) starting private framework call on mainThread=\(Thread.isMainThread): \(frameworkPath) SACLockScreenImmediate")
+
+        guard let handle = dlopen(frameworkPath, RTLD_NOW) else {
+            let message = String(cString: dlerror())
+            DiagnosticsLogger.record("Helper action \(actionName) dlopen failed: \(message)")
+            throw HelperActionError.custom("Failed to open login.framework: \(message)")
+        }
+        defer { dlclose(handle) }
+
+        typealias LockFunction = @convention(c) () -> Void
+        guard let symbol = dlsym(handle, "SACLockScreenImmediate") else {
+            let message = String(cString: dlerror())
+            DiagnosticsLogger.record("Helper action \(actionName) dlsym failed: \(message)")
+            throw HelperActionError.custom("Failed to resolve SACLockScreenImmediate: \(message)")
+        }
+
+        let lockScreen = unsafeBitCast(symbol, to: LockFunction.self)
+        lockScreen()
+        DiagnosticsLogger.record("Helper action \(actionName) private framework call completed")
+    }
+
+    private func runLoggedCommand(actionName: String, executableURL: URL, arguments: [String]) throws {
+        let process = Process()
+        let stdoutPipe = Pipe()
+        let stderrPipe = Pipe()
+
+        process.executableURL = executableURL
+        process.arguments = arguments
+        process.standardOutput = stdoutPipe
+        process.standardError = stderrPipe
+
+        DiagnosticsLogger.record("Helper action \(actionName) starting: \(executableURL.path) \(arguments.joined(separator: " "))")
+
+        do {
+            try process.run()
+        } catch {
+            DiagnosticsLogger.record(error: error, context: "Helper action \(actionName) failed to start")
+            throw error
+        }
+
+        process.waitUntilExit()
+
+        let stdoutData = stdoutPipe.fileHandleForReading.readDataToEndOfFile()
+        let stderrData = stderrPipe.fileHandleForReading.readDataToEndOfFile()
+        let stdout = String(data: stdoutData, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let stderr = String(data: stderrData, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+
+        DiagnosticsLogger.record("Helper action \(actionName) finished with status=\(process.terminationStatus), reason=\(process.terminationReason.rawValue)")
+        DiagnosticsLogger.record("Helper action \(actionName) stdout: \(stdout.isEmpty ? "<empty>" : stdout)")
+        DiagnosticsLogger.record("Helper action \(actionName) stderr: \(stderr.isEmpty ? "<empty>" : stderr)")
+
+        guard process.terminationStatus == 0 else {
+            throw HelperActionError.commandFailed(
+                actionName: actionName,
+                status: process.terminationStatus,
+                stderr: stderr.isEmpty ? stdout : stderr
+            )
+        }
+    }
+}
+
+private extension HelperActionError {
+    static func commandFailed(actionName: String, status: Int32, stderr: String) -> HelperActionError {
+        .custom("\(actionName) command failed with status \(status): \(stderr)")
     }
 }
 
@@ -358,6 +446,7 @@ private enum HelperServerStateError: LocalizedError {
 
 private enum HelperActionError: LocalizedError {
     case lockFailed
+    case custom(String)
     case logoutFailed(String)
     case missingTargetIdentifier
     case targetNotRunning(String)
@@ -366,6 +455,8 @@ private enum HelperActionError: LocalizedError {
         switch self {
         case .lockFailed:
             return "The helper could not request screen lock."
+        case let .custom(message):
+            return message
         case let .logoutFailed(message):
             return "The helper could not request logout: \(message)"
         case .missingTargetIdentifier:
