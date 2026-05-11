@@ -132,6 +132,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 onTestSwitchUser: { [weak self] in self?.startSwitchUserTest() },
                 onTestLockScreen: { [weak self] in self?.startLockScreenTest() },
                 onTestBlockRestrictedApps: { [weak self] in self?.startBlockRestrictedAppsTest() },
+                onFixPermissions: { [weak self] in self?.openPermissionsSetupWindow() },
                 onUnregister: { [weak self] in self?.unregisterThisMac() },
                 onDebugQuit: debugQuitAction
             ))
@@ -176,15 +177,39 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     @objc
     private func openSetupWindow() {
         if setupWindowController == nil {
-            let hostingController = NSHostingController(rootView: SetupView(appModel: appModel) { [weak self] in
-                self?.handleRegistrationCompleted()
-            })
+            let hostingController = NSHostingController(rootView: SetupView(
+                appModel: appModel,
+                startingStep: .registration,
+                onRegistered: { [weak self] in self?.handleRegistrationCompleted() },
+                onFinished: { [weak self] in self?.setupWindowController?.close() }
+            ))
             let window = NSWindow(contentViewController: hostingController)
             window.title = "FamilyRules Setup"
-            window.setContentSize(NSSize(width: 620, height: 320))
+            window.setContentSize(NSSize(width: 620, height: 380))
             window.isReleasedWhenClosed = false
             setupWindowController = NSWindowController(window: window)
         }
+
+        NSApp.activate(ignoringOtherApps: true)
+        setupWindowController?.showWindow(nil)
+        setupWindowController?.window?.makeKeyAndOrderFront(nil)
+    }
+
+    @objc
+    private func openPermissionsSetupWindow() {
+        setupWindowController?.close()
+        setupWindowController = nil
+
+        let hostingController = NSHostingController(rootView: SetupView(
+            appModel: appModel,
+            startingStep: .permissions,
+            onFinished: { [weak self] in self?.setupWindowController?.close() }
+        ))
+        let window = NSWindow(contentViewController: hostingController)
+        window.title = "FamilyRules Setup — Permissions"
+        window.setContentSize(NSSize(width: 620, height: 380))
+        window.isReleasedWhenClosed = false
+        setupWindowController = NSWindowController(window: window)
 
         NSApp.activate(ignoringOtherApps: true)
         setupWindowController?.showWindow(nil)
@@ -417,11 +442,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             }
         }
 
-        setupWindowController?.close()
         allDevicesLastRefreshedAt = Date()
         allDevicesModel.refresh(registration: appModel.registration)
         openDiagnosticsWindow()
         openDashboardWindow()
+        // Setup window stays open so the user can complete step 2 (permissions).
+        // It will be closed when they tap Done on the permissions step.
     }
 
     private func startSwitchUserTest() {

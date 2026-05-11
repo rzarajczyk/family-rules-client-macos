@@ -20,6 +20,7 @@ struct DashboardView: View {
     let onTestSwitchUser: () -> Void
     let onTestLockScreen: () -> Void
     let onTestBlockRestrictedApps: () -> Void
+    let onFixPermissions: () -> Void
     let onUnregister: () -> Void
     #if DEBUG
     let onDebugQuit: (() -> Void)?
@@ -29,6 +30,7 @@ struct DashboardView: View {
 
     @State private var refreshTick = 0
     @State private var selectedTab: Tab = .myDevice
+    @State private var accessibilityGranted: Bool = AccessibilityPermission.isGranted
 
     private let appIconImage = AppIconImage.load()
 
@@ -55,6 +57,10 @@ struct DashboardView: View {
 
         VStack(alignment: .leading, spacing: 18) {
             screenTimePanel(snapshot: snapshot)
+
+            if !accessibilityGranted {
+                permissionsBanner
+            }
 
             Picker("Dashboard Section", selection: $selectedTab) {
                 ForEach(Tab.allCases) { tab in
@@ -89,7 +95,41 @@ struct DashboardView: View {
         .frame(minWidth: 760, minHeight: 620)
         .onReceive(Timer.publish(every: 1, on: .main, in: .common).autoconnect()) { _ in
             refreshTick += 1
+            if !accessibilityGranted {
+                accessibilityGranted = AccessibilityPermission.isGranted
+            }
         }
+    }
+
+    private var permissionsBanner: some View {
+        HStack(spacing: 14) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(.system(size: 20))
+                .foregroundStyle(.orange)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Accessibility permission missing")
+                    .font(.subheadline.weight(.semibold))
+                Text("App blocking won't work without it.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Spacer()
+
+            Button("Fix Missing Permissions") {
+                onFixPermissions()
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(.orange)
+        }
+        .padding(14)
+        .background(Color.orange.opacity(0.10))
+        .overlay(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .strokeBorder(Color.orange.opacity(0.35), lineWidth: 1)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
 
     private func screenTimePanel(snapshot: UsageSnapshot) -> some View {

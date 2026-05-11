@@ -56,7 +56,7 @@ actor ServerSyncClient {
             throw ServerSyncClientError.requestFailed(statusCode: httpResponse.statusCode)
         }
 
-        return try decoder.decode(BlockedAppsResponsePayload.self, from: data).applications
+        return try decoder.decode(BlockedAppsResponsePayload.self, from: data).apps
     }
 
     func sendCommandAcks(_ payload: CommandAcksUploadPayload, registration: RegistrationRecord) async throws {
@@ -172,7 +172,7 @@ struct BlockedAppPayload: Decodable, Equatable {
 private struct EmptyRequestBody: Encodable {}
 
 private struct BlockedAppsResponsePayload: Decodable {
-    let applications: [BlockedAppPayload]
+    let apps: [BlockedAppPayload]
 }
 
 struct ServerCommandPayload: Decodable, Equatable {
