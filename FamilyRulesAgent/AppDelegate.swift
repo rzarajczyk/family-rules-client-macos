@@ -115,11 +115,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private func openDashboardWindow() {
         if dashboardWindowController == nil {
 #if DEBUG
-            let debugQuitAction: (() -> Void)? = { [weak self] in self?.debugQuit() }
-#else
-            let debugQuitAction: (() -> Void)? = nil
-#endif
-
             let hostingController = NSHostingController(rootView: DashboardView(
                 appModel: appModel,
                 activityMonitor: activityMonitor,
@@ -134,8 +129,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 onTestBlockRestrictedApps: { [weak self] in self?.startBlockRestrictedAppsTest() },
                 onFixPermissions: { [weak self] in self?.openPermissionsSetupWindow() },
                 onUnregister: { [weak self] in self?.unregisterThisMac() },
-                onDebugQuit: debugQuitAction
+                onDebugQuit: { [weak self] in self?.debugQuit() }
             ))
+#else
+            let hostingController = NSHostingController(rootView: DashboardView(
+                appModel: appModel,
+                activityMonitor: activityMonitor,
+                syncController: syncController,
+                lifecycleController: lifecycleController,
+                allDevicesModel: allDevicesModel,
+                onOpenDiagnostics: { [weak self] in self?.openDiagnosticsWindow() },
+                onOpenSetup: { [weak self] in self?.openSetupWindow() },
+                onPingHelper: { [weak self] in self?.pingHelper() },
+                onTestSwitchUser: { [weak self] in self?.startSwitchUserTest() },
+                onTestLockScreen: { [weak self] in self?.startLockScreenTest() },
+                onTestBlockRestrictedApps: { [weak self] in self?.startBlockRestrictedAppsTest() },
+                onFixPermissions: { [weak self] in self?.openPermissionsSetupWindow() },
+                onUnregister: { [weak self] in self?.unregisterThisMac() }
+            ))
+#endif
             let window = NSWindow(contentViewController: hostingController)
             window.title = "FamilyRules Dashboard"
             window.setContentSize(NSSize(width: 820, height: 640))
