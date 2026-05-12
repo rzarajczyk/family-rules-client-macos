@@ -46,7 +46,7 @@ final class AllDevicesModelTests: XCTestCase {
 
         model.refresh(registration: nil)
 
-        XCTAssertEqual(model.errorMessage, "Register this Mac before loading All My Devices.")
+        XCTAssertEqual(model.errorMessage, String.localized("Register this Mac before loading All My Devices."))
         XCTAssertTrue(model.groups.isEmpty)
     }
 

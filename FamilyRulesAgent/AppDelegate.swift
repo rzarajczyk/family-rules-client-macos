@@ -149,7 +149,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             ))
 #endif
             let window = NSWindow(contentViewController: hostingController)
-            window.title = "FamilyRules Dashboard"
+            window.title = String.localized("FamilyRules")
             window.setContentSize(NSSize(width: 820, height: 640))
             window.isReleasedWhenClosed = false
             dashboardWindowController = NSWindowController(window: window)
@@ -171,7 +171,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 syncController: syncController
             ))
             let window = NSWindow(contentViewController: hostingController)
-            window.title = "FamilyRules Diagnostics"
+            window.title = String.localized("FamilyRules Diagnostics")
             window.setContentSize(NSSize(width: 700, height: 520))
             window.isReleasedWhenClosed = false
             diagnosticsWindowController = NSWindowController(window: window)
@@ -196,7 +196,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 onFinished: { [weak self] in self?.setupWindowController?.close() }
             ))
             let window = NSWindow(contentViewController: hostingController)
-            window.title = "FamilyRules Setup"
+            window.title = String.localized("FamilyRules Setup")
             window.setContentSize(NSSize(width: 620, height: 380))
             window.isReleasedWhenClosed = false
             setupWindowController = NSWindowController(window: window)
@@ -218,7 +218,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             onFinished: { [weak self] in self?.setupWindowController?.close() }
         ))
         let window = NSWindow(contentViewController: hostingController)
-        window.title = "FamilyRules Setup — Permissions"
+        window.title = String.localized("FamilyRules Setup - Permissions")
         window.setContentSize(NSSize(width: 620, height: 380))
         window.isReleasedWhenClosed = false
         setupWindowController = NSWindowController(window: window)
@@ -238,10 +238,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private func unregisterThisMac() {
         let alert = NSAlert()
         alert.alertStyle = .warning
-        alert.messageText = "Unregister This Mac"
-        alert.informativeText = "This removes the saved FamilyRules registration, local logs, and queued commands from this user account."
-        alert.addButton(withTitle: "Unregister")
-        alert.addButton(withTitle: "Cancel")
+        alert.messageText = String.localized("Unregister This Mac")
+        alert.informativeText = String.localized("This removes the saved FamilyRules registration, local logs, and queued commands from this user account.")
+        alert.addButton(withTitle: String.localized("Unregister"))
+        alert.addButton(withTitle: String.localized("Cancel"))
 
         guard alert.runModal() == .alertFirstButtonReturn else { return }
 
@@ -265,7 +265,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
             let completionAlert = NSAlert()
             completionAlert.alertStyle = result.localCleanupErrorMessage == nil ? .informational : .warning
-            completionAlert.messageText = "Unregister Complete"
+            completionAlert.messageText = String.localized("Unregister Complete")
             completionAlert.informativeText = [result.summary, loginItemErrorMessage.map { "Login item cleanup failed: \($0)" }]
                 .compactMap { $0 }
                 .joined(separator: "\n\n")
@@ -519,7 +519,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             button.toolTip = "FamilyRules"
             button.target = self
             button.action = #selector(handleStatusItemClick(_:))
-            button.sendAction(on: [.leftMouseUp, .rightMouseUp])
+            button.sendAction(on: [.leftMouseUp])
         }
 
         let menu = NSMenu()
@@ -575,16 +575,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     @objc
     private func handleStatusItemClick(_ sender: NSStatusBarButton) {
-        guard let event = NSApp.currentEvent else {
-            openDashboardWindow()
-            return
-        }
-
-        if event.type == .rightMouseUp || event.modifierFlags.contains(.control) {
-            openDashboardMenu(of: sender)
-            return
-        }
-
+        _ = sender
         openDashboardWindow()
     }
 

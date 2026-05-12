@@ -10,34 +10,14 @@ enum AppIconImage {
     }
 
     static func loadStatusBarImage(blockingEnabled: Bool, size: NSSize) -> NSImage? {
-        guard let baseImage = load() else {
+        let resourceName = blockingEnabled ? "TrayIconBlocked" : "TrayIconActive"
+        guard let url = Bundle.main.url(forResource: resourceName, withExtension: "png") else {
             return nil
         }
 
-        let outputImage = NSImage(size: size)
-        outputImage.lockFocus()
-
-        NSGraphicsContext.current?.imageInterpolation = .high
-        baseImage.draw(in: NSRect(origin: .zero, size: size))
-
-        if blockingEnabled {
-            let badgeDiameter = min(size.width, size.height) * 0.56
-            let badgeRect = NSRect(
-                x: (size.width - badgeDiameter) / 2,
-                y: (size.height - badgeDiameter) / 2,
-                width: badgeDiameter,
-                height: badgeDiameter
-            )
-
-            NSColor.white.withAlphaComponent(0.92).setFill()
-            NSBezierPath(ovalIn: badgeRect.insetBy(dx: -1.5, dy: -1.5)).fill()
-
-            NSColor.systemRed.setFill()
-            NSBezierPath(ovalIn: badgeRect).fill()
-        }
-
-        outputImage.unlockFocus()
-        outputImage.isTemplate = false
-        return outputImage
+        let image = NSImage(contentsOf: url)
+        image?.size = size
+        image?.isTemplate = true
+        return image
     }
 }

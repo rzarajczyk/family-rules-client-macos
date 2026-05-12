@@ -2,11 +2,20 @@ import AppKit
 import SwiftUI
 
 struct DashboardView: View {
-    private enum Tab: String, CaseIterable, Identifiable {
-        case myDevice = "My Device"
-        case allDevices = "All My Devices"
+    private enum Tab: CaseIterable, Identifiable {
+        case myDevice
+        case allDevices
 
-        var id: String { rawValue }
+        var id: Self { self }
+
+        var title: String {
+            switch self {
+            case .myDevice:
+                return String.localized("This Device")
+            case .allDevices:
+                return String.localized("All My Devices")
+            }
+        }
     }
 
     @ObservedObject var appModel: AppModel
@@ -55,7 +64,7 @@ struct DashboardView: View {
     var body: some View {
         let snapshot = activityMonitor.snapshot()
 
-        VStack(alignment: .leading, spacing: 18) {
+        VStack(alignment: .leading, spacing: 14) {
             screenTimePanel(snapshot: snapshot)
 
             if !accessibilityGranted {
@@ -64,7 +73,7 @@ struct DashboardView: View {
 
             Picker("Dashboard Section", selection: $selectedTab) {
                 ForEach(Tab.allCases) { tab in
-                    Text(tab.rawValue).tag(tab)
+                    Text(tab.title).tag(tab)
                 }
             }
             .pickerStyle(.segmented)
@@ -169,7 +178,7 @@ struct DashboardView: View {
                     Button("Ping Helper", action: onPingHelper)
                     Divider()
                     Button("Test Switch User (30s)", action: onTestSwitchUser)
-                    Button("Test Lock Screen (30s)", action: onTestLockScreen)
+                    Button(String.localized("Test Lock Screen (30s)"), action: onTestLockScreen)
                     Button("Test Block Restricted Apps (30s)", action: onTestBlockRestrictedApps)
                     Divider()
                     Button("Unregister This Mac", role: .destructive, action: onUnregister)
@@ -186,10 +195,7 @@ struct DashboardView: View {
                 .menuIndicator(.hidden)
             }
 
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Today")
-                    .foregroundStyle(.white.opacity(0.82))
-
+            VStack(alignment: .leading, spacing: 4) {
                 Text(formatDuration(snapshot.screenTimeSeconds))
                     .font(.system(size: 44, weight: .heavy, design: .rounded))
                     .foregroundStyle(.white)
@@ -199,13 +205,13 @@ struct DashboardView: View {
                 Text(error)
                     .font(.subheadline)
                     .foregroundStyle(.white.opacity(0.92))
-            } else {
-                Text(statusSummary(snapshot: snapshot))
+            } else if let summary = statusSummary(snapshot: snapshot) {
+                Text(summary)
                     .font(.subheadline)
                     .foregroundStyle(.white.opacity(0.92))
             }
         }
-        .padding(20)
+        .padding(18)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
             LinearGradient(
@@ -217,7 +223,7 @@ struct DashboardView: View {
         .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
     }
 
-    private func statusSummary(snapshot: UsageSnapshot) -> String {
+    private func statusSummary(snapshot: UsageSnapshot) -> String? {
         if let countdown = lifecycleController.countdownPresentation {
             return "\(countdown.title) in \(countdown.secondsRemaining)s."
         }
@@ -226,7 +232,11 @@ struct DashboardView: View {
             return "Server state: \(lifecycleController.statusDescription)."
         }
 
-        return snapshot.isEligibleForReporting ? "Monitoring is active right now." : "Monitoring is paused while the session is inactive."
+        if snapshot.isEligibleForReporting {
+            return nil
+        }
+
+        return String.localized("Monitoring is paused while the session is inactive.")
     }
 
     private func appUsagePanel(
@@ -241,9 +251,6 @@ struct DashboardView: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Apps")
                         .font(.system(size: 24, weight: .bold, design: .rounded))
-
-                    Text("Scroll through focused and visible usage today")
-                        .foregroundStyle(.secondary)
                 }
 
                 Spacer()
@@ -305,8 +312,8 @@ struct DashboardView: View {
             Spacer(minLength: 12)
 
             HStack(spacing: 18) {
-                timeValue(title: "Focused", seconds: focusedSeconds)
-                timeValue(title: "Visible", seconds: visibleSeconds)
+                timeValue(title: String.localized("Focused"), seconds: focusedSeconds)
+                timeValue(title: String.localized("Visible"), seconds: visibleSeconds)
             }
             .frame(alignment: .trailing)
         }

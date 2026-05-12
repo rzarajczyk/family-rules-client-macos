@@ -19,7 +19,7 @@ final class AllDevicesModel: ObservableObject {
     func refresh(registration: RegistrationRecord?) {
         guard let registration else {
             groups = []
-            errorMessage = "Register this Mac before loading All My Devices."
+            errorMessage = String.localized("Register this Mac before loading All My Devices.")
             return
         }
 

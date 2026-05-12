@@ -77,9 +77,9 @@ struct SetupView: View {
 
     private var stepIndicator: some View {
         HStack(spacing: 0) {
-            stepLabel(number: 1, title: "Connect", isActive: currentStep == .registration, isDone: currentStep == .permissions)
+            stepLabel(number: 1, title: String(localized: "Connect"), isActive: currentStep == .registration, isDone: currentStep == .permissions)
             stepConnector(filled: currentStep == .permissions)
-            stepLabel(number: 2, title: "Permissions", isActive: currentStep == .permissions, isDone: false)
+            stepLabel(number: 2, title: String(localized: "Permissions"), isActive: currentStep == .permissions, isDone: false)
         }
     }
 
