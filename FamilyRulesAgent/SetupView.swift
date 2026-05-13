@@ -122,7 +122,7 @@ private struct RegistrationStepView: View {
     @State private var serverURL = ""
     @State private var username = ""
     @State private var password = ""
-    @State private var instanceName = Host.current().localizedName ?? "My Mac"
+    @State private var instanceName = LocalAccountIdentity.currentUserScopedInstanceName()
     @State private var errorMessage: String?
     @State private var isRegistering = false
 

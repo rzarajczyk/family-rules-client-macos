@@ -228,7 +228,7 @@ private final class SettingsDatabase {
 
 final class TokenKeychainStore {
     private let service = "com.familyrules.agent.registration"
-    private let account = "instanceToken"
+    private let account = "instanceToken:\(NSUserName())"
 
     func loadInstanceToken() throws -> String? {
         var query = baseQuery
