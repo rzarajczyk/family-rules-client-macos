@@ -37,6 +37,7 @@ struct DashboardView: View {
     @State private var refreshTick = 0
     @State private var selectedTab: Tab = .myDevice
     @State private var accessibilityGranted: Bool = AccessibilityPermission.isGranted
+    @State private var isMoreMenuUnlocked = false
 
     private let appIconImage = AppIconImage.load()
 
@@ -169,23 +170,25 @@ struct DashboardView: View {
 
                 Spacer()
 
-                Menu {
-                    Button("Open Diagnostics", action: onOpenDiagnostics)
-                    Button("Open Setup", action: onOpenSetup)
-                    Button("Ping Helper", action: onPingHelper)
-                    Divider()
-                    Button("Unregister This Mac", role: .destructive, action: onUnregister)
-                    if let onDebugQuit {
+                if isMoreMenuUnlocked {
+                    Menu {
+                        Button("Open Diagnostics", action: onOpenDiagnostics)
+                        Button("Open Setup", action: onOpenSetup)
+                        Button("Ping Helper", action: onPingHelper)
                         Divider()
-                        Button("Quit (Debug)", action: onDebugQuit)
+                        Button("Unregister This Mac", role: .destructive, action: onUnregister)
+                        if let onDebugQuit {
+                            Divider()
+                            Button("Quit (Debug)", action: onDebugQuit)
+                        }
+                    } label: {
+                        Image(systemName: "ellipsis.circle")
+                            .font(.system(size: 24, weight: .semibold))
+                            .foregroundStyle(.white)
                     }
-                } label: {
-                    Image(systemName: "ellipsis.circle")
-                        .font(.system(size: 24, weight: .semibold))
-                        .foregroundStyle(.white)
+                    .menuStyle(.borderlessButton)
+                    .menuIndicator(.hidden)
                 }
-                .menuStyle(.borderlessButton)
-                .menuIndicator(.hidden)
             }
 
             VStack(alignment: .leading, spacing: 4) {
@@ -214,6 +217,10 @@ struct DashboardView: View {
             )
         )
         .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+        .contentShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+        .onTapGesture(count: 5) {
+            isMoreMenuUnlocked = true
+        }
     }
 
     private func statusSummary(snapshot: UsageSnapshot) -> String? {
