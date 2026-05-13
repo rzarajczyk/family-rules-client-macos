@@ -3,7 +3,8 @@
 "FamilyRules Setup" = "Konfiguracja FamilyRules";
 "FamilyRules Setup - Permissions" = "Konfiguracja FamilyRules - Uprawnienia";
 "This Device" = "To urządzenie";
-"All My Devices" = "Wszystkie moje urządzenia";
+"All My Devices" = "Wszystkie Twoje urządzenia";
+"Dashboard Section" = "Sekcja pulpitu";
 "Monitoring is paused while the session is inactive." = "Monitorowanie jest wstrzymane, gdy sesja jest nieaktywna.";
 "Register this Mac before loading All My Devices." = "Zarejestruj tego Maca przed wczytaniem wszystkich moich urządzeń.";
 "Connect" = "Połącz";
@@ -15,4 +16,14 @@
 "Unregister Complete" = "Wyrejestrowanie zakończone";
 "Focused" = "Na pierwszym planie";
 "Visible" = "Widoczne";
+"FamilyRules Locked" = "FamilyRules - blokada";
+"This Mac is locked" = "Ten Mac jest zablokowany";
+"FamilyRules has temporarily locked this device. Ask a parent to unlock it to continue." = "FamilyRules tymczasowo zablokował to urządzenie. Poproś rodzica o odblokowanie, aby kontynuować.";
+"%@ is blocked" = "%@ jest zablokowana";
+"FamilyRules blocked this app on this Mac. Minimize its windows to continue." = "FamilyRules zablokował tę aplikację na tym Macu. Zminimalizuj jej okna, aby kontynuować.";
+"Minimize all windows" = "Zminimalizuj wszystkie okna";
+"Screen Locked" = "Ekran zablokowany";
+"Screen lock scheduled" = "Zaplanowano blokadę ekranu";
+"Save your work before the screen locks." = "Zapisz swoją pracę, zanim ekran zostanie zablokowany.";
+"Locking in %ds" = "Blokada za %ds";
 "Test Lock Screen (30s)" = "Test blokady ekranu (30 s)";

@@ -26,9 +26,6 @@ struct DashboardView: View {
     let onOpenDiagnostics: () -> Void
     let onOpenSetup: () -> Void
     let onPingHelper: () -> Void
-    let onTestSwitchUser: () -> Void
-    let onTestLockScreen: () -> Void
-    let onTestBlockRestrictedApps: () -> Void
     let onFixPermissions: () -> Void
     let onUnregister: () -> Void
     #if DEBUG
@@ -71,7 +68,7 @@ struct DashboardView: View {
                 permissionsBanner
             }
 
-            Picker("Dashboard Section", selection: $selectedTab) {
+            Picker(String.localized("Dashboard Section"), selection: $selectedTab) {
                 ForEach(Tab.allCases) { tab in
                     Text(tab.title).tag(tab)
                 }
@@ -176,10 +173,6 @@ struct DashboardView: View {
                     Button("Open Diagnostics", action: onOpenDiagnostics)
                     Button("Open Setup", action: onOpenSetup)
                     Button("Ping Helper", action: onPingHelper)
-                    Divider()
-                    Button("Test Switch User (30s)", action: onTestSwitchUser)
-                    Button(String.localized("Test Lock Screen (30s)"), action: onTestLockScreen)
-                    Button("Test Block Restricted Apps (30s)", action: onTestBlockRestrictedApps)
                     Divider()
                     Button("Unregister This Mac", role: .destructive, action: onUnregister)
                     if let onDebugQuit {

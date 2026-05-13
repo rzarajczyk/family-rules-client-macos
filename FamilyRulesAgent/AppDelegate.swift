@@ -124,9 +124,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 onOpenDiagnostics: { [weak self] in self?.openDiagnosticsWindow() },
                 onOpenSetup: { [weak self] in self?.openSetupWindow() },
                 onPingHelper: { [weak self] in self?.pingHelper() },
-                onTestSwitchUser: { [weak self] in self?.startSwitchUserTest() },
-                onTestLockScreen: { [weak self] in self?.startLockScreenTest() },
-                onTestBlockRestrictedApps: { [weak self] in self?.startBlockRestrictedAppsTest() },
                 onFixPermissions: { [weak self] in self?.openPermissionsSetupWindow() },
                 onUnregister: { [weak self] in self?.unregisterThisMac() },
                 onDebugQuit: { [weak self] in self?.debugQuit() }
@@ -141,9 +138,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 onOpenDiagnostics: { [weak self] in self?.openDiagnosticsWindow() },
                 onOpenSetup: { [weak self] in self?.openSetupWindow() },
                 onPingHelper: { [weak self] in self?.pingHelper() },
-                onTestSwitchUser: { [weak self] in self?.startSwitchUserTest() },
-                onTestLockScreen: { [weak self] in self?.startLockScreenTest() },
-                onTestBlockRestrictedApps: { [weak self] in self?.startBlockRestrictedAppsTest() },
                 onFixPermissions: { [weak self] in self?.openPermissionsSetupWindow() },
                 onUnregister: { [weak self] in self?.unregisterThisMac() }
             ))
@@ -371,7 +365,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 }
             }
             // Update content and show all overlay windows.
-            let title = lockScreenActive ? "FamilyRules Locked" : (lifecycleController.countdownPresentation?.title ?? restrictedAppPresentation?.appName ?? "FamilyRules")
+            let title = lockScreenActive ? String.localized("FamilyRules Locked") : (lifecycleController.countdownPresentation?.title ?? restrictedAppPresentation?.appName ?? "FamilyRules")
             for wc in stateWindowControllers {
                 if let hc = wc.contentViewController as? NSHostingController<StateOverlayView> {
                     hc.rootView = StateOverlayView(
@@ -408,7 +402,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private func handleMinimizeRestrictedAppWindows() {
         guard let targetIdentifier = restrictedAppEnforcementState.blockedAppIdentifier else { return }
 
-        let applications = NSRunningApplication.runningApplications(withBundleIdentifier: targetIdentifier)
+        let applications = runningApplications(matching: targetIdentifier)
         for application in applications {
             let axApp = AXUIElementCreateApplication(application.processIdentifier)
             var windowsRef: CFTypeRef?
@@ -418,6 +412,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                     AXUIElementSetAttributeValue(axWindow, kAXMinimizedAttribute as CFString, true as CFTypeRef)
                 }
             }
+
+            application.hide()
         }
 
         // Activate Finder so the desktop is in the foreground after minimizing.
@@ -426,16 +422,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
 
         Task { [weak self] in
-            try? await Task.sleep(for: .milliseconds(400))
+            try? await Task.sleep(for: .milliseconds(1200))
             await MainActor.run {
-                self?.attemptRestrictedAppFallbackIfNeeded(targetIdentifier: targetIdentifier)
+                self?.attemptRestrictedAppFallbackIfNeeded(targetIdentifier: targetIdentifier, applications: applications)
             }
         }
     }
 
-    private func attemptRestrictedAppFallbackIfNeeded(targetIdentifier: String) {
-        let snapshot = activityMonitor.snapshot()
-        let shouldTerminate = snapshot.visibleApps.contains(targetIdentifier)
+    private func attemptRestrictedAppFallbackIfNeeded(targetIdentifier: String, applications: [NSRunningApplication]? = nil) {
+        let resolvedApplications = applications ?? runningApplications(matching: targetIdentifier)
+        let shouldTerminate = resolvedApplications.contains { applicationHasVisibleUnminimizedWindows($0) }
         guard shouldTerminate else {
             restrictedAppEnforcementState.clear()
             updateStateWindow()
@@ -445,6 +441,36 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         Task {
             _ = await lifecycleController.performRestrictedAppFallbackTermination(targetIdentifier: targetIdentifier)
         }
+    }
+
+    private func runningApplications(matching targetIdentifier: String) -> [NSRunningApplication] {
+        NSWorkspace.shared.runningApplications.filter { application in
+            application.bundleIdentifier == targetIdentifier
+                || application.bundleURL?.path == targetIdentifier
+                || application.executableURL?.path == targetIdentifier
+        }
+    }
+
+    private func applicationHasVisibleUnminimizedWindows(_ application: NSRunningApplication) -> Bool {
+        let axApp = AXUIElementCreateApplication(application.processIdentifier)
+        var windowsRef: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(axApp, kAXWindowsAttribute as CFString, &windowsRef) == .success,
+              let windows = windowsRef as? [AXUIElement]
+        else {
+            return false
+        }
+
+        for axWindow in windows {
+            var minimizedRef: CFTypeRef?
+            let isMinimized = AXUIElementCopyAttributeValue(axWindow, kAXMinimizedAttribute as CFString, &minimizedRef) == .success
+                && (minimizedRef as? Bool == true)
+
+            if !isMinimized {
+                return true
+            }
+        }
+
+        return false
     }
 
     private func handleRegistrationCompleted() {

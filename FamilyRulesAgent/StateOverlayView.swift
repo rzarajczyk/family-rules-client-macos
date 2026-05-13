@@ -95,64 +95,74 @@ struct StateOverlayView: View {
     }
 
     private func restrictedAppView(_ restrictedAppPresentation: RestrictedAppOverlayPresentation) -> some View {
-        VStack(spacing: 22) {
-            Image(systemName: "hand.raised.fill")
-                .font(.system(size: 40, weight: .bold))
-                .foregroundStyle(.white)
-
-            Text("App Restricted")
-                .font(.system(size: 28, weight: .bold, design: .rounded))
-                .foregroundStyle(.white)
-
-            Text(restrictedAppPresentation.appName)
-                .font(.title3.weight(.semibold))
-                .foregroundStyle(.white.opacity(0.96))
-
-            Text("This app is blocked by FamilyRules. Minimize its windows to continue using this Mac.")
-                .font(.headline)
-                .multilineTextAlignment(.center)
-                .foregroundStyle(.white.opacity(0.92))
-                .frame(maxWidth: 520)
-
-            if let onMinimizeAllWindows {
-                Button("Minimize all windows", action: onMinimizeAllWindows)
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.large)
-                    .tint(.white)
-                    .foregroundStyle(Color(red: 0.55, green: 0.08, blue: 0.15))
-            }
-        }
-        .padding(36)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(
-            LinearGradient(
-                colors: [Color(red: 0.40, green: 0.08, blue: 0.14), Color(red: 0.85, green: 0.29, blue: 0.16)],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
+        lockedOverlayLayout(
+            appIcon: appIcon(for: restrictedAppPresentation.appIdentifier),
+            title: String(format: String.localized("%@ is blocked"), restrictedAppPresentation.appName),
+            subtitle: String.localized("FamilyRules blocked this app on this Mac. Minimize its windows to continue."),
+            actionTitle: onMinimizeAllWindows == nil ? nil : String.localized("Minimize all windows"),
+            action: onMinimizeAllWindows
         )
     }
 
     private var lockScreenView: some View {
+        lockedOverlayLayout(
+            appIcon: AppIconImage.load(),
+            title: String.localized("This Mac is locked"),
+            subtitle: String.localized("FamilyRules has temporarily locked this device. Ask a parent to unlock it to continue.")
+        )
+    }
+
+    private func lockedOverlayLayout(
+        appIcon: NSImage? = nil,
+        iconSystemName: String? = nil,
+        title: String,
+        subtitle: String,
+        detail: String? = nil,
+        actionTitle: String? = nil,
+        action: (() -> Void)? = nil
+    ) -> some View {
         VStack(spacing: 28) {
-            if let icon = AppIconImage.load() {
-                Image(nsImage: icon)
+            if let appIcon {
+                Image(nsImage: appIcon)
                     .resizable()
                     .interpolation(.high)
                     .scaledToFit()
                     .frame(width: 128, height: 128)
                     .shadow(color: .black.opacity(0.22), radius: 18, y: 8)
+            } else if let iconSystemName {
+                Image(systemName: iconSystemName)
+                    .font(.system(size: 72, weight: .bold))
+                    .foregroundStyle(.white)
+                    .shadow(color: .black.opacity(0.18), radius: 12, y: 6)
             }
 
-            Text("This Mac is locked")
+            Text(title)
                 .font(.system(size: 38, weight: .bold, design: .rounded))
                 .foregroundStyle(.white)
 
-            Text("FamilyRules has temporarily locked this device. Ask a parent to unlock it to continue.")
+            if let detail {
+                Text(detail)
+                    .font(.system(size: 24, weight: .semibold, design: .rounded))
+                    .multilineTextAlignment(.center)
+                    .foregroundStyle(.white.opacity(0.96))
+                    .frame(maxWidth: 760)
+            }
+
+            Text(subtitle)
                 .font(.system(size: 22, weight: .medium, design: .rounded))
                 .multilineTextAlignment(.center)
                 .foregroundStyle(.white.opacity(0.92))
                 .frame(maxWidth: 760)
+
+            if let actionTitle, let action {
+                Button(actionTitle, action: action)
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.large)
+                    .tint(Color(red: 0.95, green: 0.44, blue: 0.33))
+                    .foregroundStyle(.white)
+                    .shadow(color: .black.opacity(0.22), radius: 10, y: 4)
+                    .padding(.top, 6)
+            }
         }
         .padding(48)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -163,5 +173,17 @@ struct StateOverlayView: View {
                 endPoint: .bottomTrailing
             )
         )
+    }
+
+    private func appIcon(for identifier: String) -> NSImage? {
+        if FileManager.default.fileExists(atPath: identifier) {
+            return NSWorkspace.shared.icon(forFile: identifier)
+        }
+
+        if let appURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: identifier) {
+            return NSWorkspace.shared.icon(forFile: appURL.path)
+        }
+
+        return nil
     }
 }

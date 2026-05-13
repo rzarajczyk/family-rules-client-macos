@@ -3,7 +3,8 @@
 "FamilyRules Setup" = "FamilyRules Setup";
 "FamilyRules Setup - Permissions" = "FamilyRules Setup - Permissions";
 "This Device" = "This Device";
-"All My Devices" = "All My Devices";
+"All My Devices" = "All Your Devices";
+"Dashboard Section" = "Dashboard Section";
 "Monitoring is paused while the session is inactive." = "Monitoring is paused while the session is inactive.";
 "Register this Mac before loading All My Devices." = "Register this Mac before loading All My Devices.";
 "Connect" = "Connect";
@@ -15,4 +16,14 @@
 "Unregister Complete" = "Unregister Complete";
 "Focused" = "Focused";
 "Visible" = "Visible";
+"FamilyRules Locked" = "FamilyRules Locked";
+"This Mac is locked" = "This Mac is locked";
+"FamilyRules has temporarily locked this device. Ask a parent to unlock it to continue." = "FamilyRules has temporarily locked this device. Ask a parent to unlock it to continue.";
+"%@ is blocked" = "%@ is blocked";
+"FamilyRules blocked this app on this Mac. Minimize its windows to continue." = "FamilyRules blocked this app on this Mac. Minimize its windows to continue.";
+"Minimize all windows" = "Minimize all windows";
+"Screen Locked" = "Screen Locked";
+"Screen lock scheduled" = "Screen lock scheduled";
+"Save your work before the screen locks." = "Save your work before the screen locks.";
+"Locking in %ds" = "Locking in %ds";
 "Test Lock Screen (30s)" = "Test Lock Screen (30s)";

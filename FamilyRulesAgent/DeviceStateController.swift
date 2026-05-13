@@ -89,7 +89,7 @@ final class DeviceStateController: ObservableObject, DeviceStateControlling {
             statusDescription = "Blocking Restricted Apps"
             restrictedAppBlockingEnabled = true
         case "LOCK_SCREEN":
-            statusDescription = "Screen Locked"
+            statusDescription = String.localized("Screen Locked")
         case "LOGOUT":
             statusDescription = "Switching User"
             shouldEnforceSwitchUserLoop = true
@@ -161,7 +161,7 @@ final class DeviceStateController: ObservableObject, DeviceStateControlling {
                 self.restrictedAppBlockingEnabled = true
             case "LOCK_SCREEN_WITH_TIMEOUT":
                 self.normalizedState = "LOCK_SCREEN"
-                self.statusDescription = "Screen Locked"
+                self.statusDescription = String.localized("Screen Locked")
             case "LOGOUT_WITH_TIMEOUT":
                 self.normalizedState = "LOGOUT"
                 self.statusDescription = "Switching User"
@@ -231,8 +231,8 @@ final class DeviceStateController: ObservableObject, DeviceStateControlling {
             )
         case "LOCK_SCREEN_WITH_TIMEOUT":
             return StateCountdownPresentation(
-                title: "Screen lock scheduled",
-                message: "Save your work before the screen locks.",
+                title: String.localized("Screen lock scheduled"),
+                message: String.localized("Save your work before the screen locks."),
                 secondsRemaining: secondsRemaining
             )
         default:
@@ -249,7 +249,7 @@ final class DeviceStateController: ObservableObject, DeviceStateControlling {
         case "BLOCK_RESTRICTED_APPS_WITH_TIMEOUT":
             return "Blocking restricted apps in \(secondsRemaining)s"
         case "LOCK_SCREEN_WITH_TIMEOUT":
-            return "Locking in \(secondsRemaining)s"
+            return String(format: String.localized("Locking in %ds"), secondsRemaining)
         default:
             return "Switching user in \(secondsRemaining)s"
         }
