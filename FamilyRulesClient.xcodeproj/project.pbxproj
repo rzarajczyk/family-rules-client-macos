@@ -28,7 +28,7 @@
 		A10000120000000000000002 /* SetupView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001120000000000000002 /* SetupView.swift */; };
 		A10000130000000000000002 /* AppModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001130000000000000002 /* AppModelTests.swift */; };
 		A10000140000000000000002 /* RegistrationClientTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001140000000000000002 /* RegistrationClientTests.swift */; };
-		A10000150000000000000002 /* FamilyRulesAgent.app in Frameworks */ = {isa = PBXBuildFile; fileRef = A10002010000000000000001 /* FamilyRulesAgent.app */; };
+		A10000150000000000000002 /* FamilyRules.app in Frameworks */ = {isa = PBXBuildFile; fileRef = A10002010000000000000001 /* FamilyRules.app */; };
 		A10000160000000000000003 /* ActivityMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001150000000000000003 /* ActivityMonitor.swift */; };
 		A10000170000000000000003 /* ServerSyncClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001160000000000000003 /* ServerSyncClient.swift */; };
 		A10000180000000000000003 /* SyncController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001170000000000000003 /* SyncController.swift */; };
@@ -110,7 +110,7 @@
 		A100013A0000000000000009 /* pl */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = pl; path = pl.lproj/Localizable.strings; sourceTree = "<group>"; };
 		A10001350000000000000008 /* TrayIconActive.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = TrayIconActive.png; sourceTree = "<group>"; };
 		A10001360000000000000008 /* TrayIconBlocked.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = TrayIconBlocked.png; sourceTree = "<group>"; };
-		A10002010000000000000001 /* FamilyRulesAgent.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = FamilyRulesAgent.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		A10002010000000000000001 /* FamilyRules.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = FamilyRules.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		A10002020000000000000001 /* FamilyRulesHelper.xpc */ = {isa = PBXFileReference; explicitFileType = "wrapper.xpc-service"; includeInIndex = 0; path = FamilyRulesHelper.xpc; sourceTree = BUILT_PRODUCTS_DIR; };
 		A10002030000000000000002 /* FamilyRulesAgentTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = FamilyRulesAgentTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		B5B60BCA2FAF8BD000C1AD99 /* 000-SPEC.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = "000-SPEC.md"; sourceTree = "<group>"; };
@@ -137,7 +137,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				A10000150000000000000002 /* FamilyRulesAgent.app in Frameworks */,
+				A10000150000000000000002 /* FamilyRules.app in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -228,7 +228,7 @@
 		A10008060000000000000001 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				A10002010000000000000001 /* FamilyRulesAgent.app */,
+				A10002010000000000000001 /* FamilyRules.app */,
 				A10002020000000000000001 /* FamilyRulesHelper.xpc */,
 				A10002030000000000000002 /* FamilyRulesAgentTests.xctest */,
 			);
@@ -281,7 +281,7 @@
 			);
 			name = FamilyRulesAgent;
 			productName = FamilyRulesAgent;
-			productReference = A10002010000000000000001 /* FamilyRulesAgent.app */;
+			productReference = A10002010000000000000001 /* FamilyRules.app */;
 			productType = "com.apple.product-type.application";
 		};
 		A10005020000000000000001 /* FamilyRulesHelper */ = {
@@ -550,7 +550,7 @@
 					"-lsqlite3",
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.familyrules.agent;
-				PRODUCT_NAME = FamilyRulesAgent;
+				PRODUCT_NAME = FamilyRules;
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SKIP_INSTALL = NO;
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -579,7 +579,7 @@
 					"-lsqlite3",
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.familyrules.agent;
-				PRODUCT_NAME = FamilyRulesAgent;
+				PRODUCT_NAME = FamilyRules;
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SKIP_INSTALL = NO;
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -662,7 +662,7 @@
 				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_VERSION = 6.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/FamilyRulesAgent.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/FamilyRulesAgent";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/FamilyRules.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/FamilyRules";
 			};
 			name = Debug;
 		};
@@ -687,7 +687,7 @@
 				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_VERSION = 6.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/FamilyRulesAgent.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/FamilyRulesAgent";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/FamilyRules.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/FamilyRules";
 			};
 			name = Release;
 		};

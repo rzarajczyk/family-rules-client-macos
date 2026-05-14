@@ -217,19 +217,21 @@ The current test suite covers:
 1. Run the app from Xcode.
 2. Confirm the setup window appears automatically if the app is not registered yet.
 3. Complete registration with real server credentials.
-4. Confirm diagnostics shows `Registered` and the returned instance ID.
-5. Keep the session unlocked with the screen awake for at least 30 seconds.
-6. Open the dashboard and confirm screen time and usage sections are populated.
-7. Switch between apps and confirm `Foreground App` and dashboard usage values update.
-8. Open diagnostics and confirm `Last Client-Info` and `Last Report` update.
-9. Confirm `Last Device State` reflects the server response from `/report`.
-10. Stop the app.
-11. Run it again.
-12. Confirm setup does not appear again.
-13. Open dashboard and diagnostics and confirm the saved registration is still loaded.
-14. Open `All My Devices` and confirm grouped usage cards load from the server.
-15. Use `Unregister This Mac` and confirm the app returns to setup mode.
-16. Verify `~/Library/Application Support/FamilyRulesAgent/` no longer contains the local databases/log after unregister.
+4. Confirm the setup advances to the permissions step instead of opening dashboard or diagnostics.
+5. Grant Accessibility permission and click `Done`.
+6. Confirm the setup window closes and only the dashboard opens.
+7. Keep the session unlocked with the screen awake for at least 30 seconds.
+8. Open the dashboard and confirm screen time and usage sections are populated.
+9. Switch between apps and confirm `Foreground App` and dashboard usage values update.
+10. Open diagnostics manually and confirm `Last Client-Info` and `Last Report` update.
+11. Confirm `Last Device State` reflects the server response from `/report`.
+12. Stop the app.
+13. Run it again.
+14. Confirm setup does not appear again.
+15. Open dashboard and diagnostics and confirm the saved registration is still loaded.
+16. Open `All My Devices` and confirm grouped usage cards load from the server.
+17. Use `Unregister This Mac` and confirm the app returns to setup mode.
+18. Verify `~/Library/Application Support/FamilyRulesAgent/` no longer contains the local databases/log after unregister.
 
 ## What Steps 3-10 Include
 

@@ -28,9 +28,7 @@ struct SetupView: View {
 
     @ObservedObject var appModel: AppModel
     let startingStep: StartingStep
-    /// Called immediately after successful registration (step 1). Use to start sync / open dashboard.
-    let onRegistered: () -> Void
-    /// Called when the user taps Done on the permissions step (step 2). Use to close the window.
+    /// Called when the user finishes the setup flow after completing permissions.
     let onFinished: () -> Void
 
     @State private var currentStep: Step
@@ -43,12 +41,10 @@ struct SetupView: View {
     init(
         appModel: AppModel,
         startingStep: StartingStep = .registration,
-        onRegistered: @escaping () -> Void = {},
         onFinished: @escaping () -> Void
     ) {
         self.appModel = appModel
         self.startingStep = startingStep
-        self.onRegistered = onRegistered
         self.onFinished = onFinished
         _currentStep = State(initialValue: startingStep == .permissions ? .permissions : .registration)
     }
@@ -65,7 +61,6 @@ struct SetupView: View {
             switch currentStep {
             case .registration:
                 RegistrationStepView(appModel: appModel) {
-                    onRegistered()
                     currentStep = .permissions
                 }
             case .permissions:
@@ -239,7 +234,11 @@ private struct RegistrationStepView: View {
 struct PermissionsStepView: View {
     let onDone: () -> Void
 
-    @State private var isGranted: Bool = AccessibilityPermission.isGranted
+    @State private var isAccessibilityGranted = AccessibilityPermission.isGranted
+    @State private var isStartAtLoginEnabled = ServiceManagementBridge.isMainAppEnabled
+    @State private var startAtLoginStatus = ServiceManagementBridge.registrationDescription()
+    @State private var startAtLoginError: String?
+    @State private var isRegisteringStartAtLogin = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 24) {
@@ -250,7 +249,14 @@ struct PermissionsStepView: View {
                     .foregroundStyle(.secondary)
             }
 
-            permissionRow
+            accessibilityPermissionRow
+            startAtLoginPermissionRow
+
+            if let startAtLoginError {
+                Text(startAtLoginError)
+                    .font(.caption)
+                    .foregroundStyle(.red)
+            }
 
             Spacer()
 
@@ -259,28 +265,34 @@ struct PermissionsStepView: View {
                 Button("Done") {
                     onDone()
                 }
-                .disabled(!isGranted)
+                .disabled(!isAccessibilityGranted || !isStartAtLoginEnabled)
                 .keyboardShortcut(.defaultAction)
 
-                if !isGranted {
-                    Text("Grant permission above to continue.")
+                if !isAccessibilityGranted || !isStartAtLoginEnabled {
+                    Text("Complete both permissions above to continue.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
             }
         }
         .padding(24)
+        .onAppear {
+            refreshPermissionState()
+            if !isStartAtLoginEnabled {
+                enableStartAtLogin()
+            }
+        }
         .onReceive(Timer.publish(every: 1, on: .main, in: .common).autoconnect()) { _ in
-            guard !isGranted else { return }  // stop checking once granted
-            isGranted = AccessibilityPermission.isGranted
+            guard !isAccessibilityGranted || !isStartAtLoginEnabled else { return }
+            refreshPermissionState()
         }
     }
 
-    private var permissionRow: some View {
+    private var accessibilityPermissionRow: some View {
         HStack(spacing: 16) {
             Image(systemName: "accessibility")
                 .font(.system(size: 28))
-                .foregroundStyle(isGranted ? .green : .orange)
+                .foregroundStyle(isAccessibilityGranted ? .green : .orange)
                 .frame(width: 40)
 
             VStack(alignment: .leading, spacing: 4) {
@@ -293,7 +305,7 @@ struct PermissionsStepView: View {
 
             Spacer()
 
-            if isGranted {
+            if isAccessibilityGranted {
                 Label("Granted", systemImage: "checkmark.circle.fill")
                     .foregroundStyle(.green)
                     .font(.subheadline.weight(.semibold))
@@ -307,5 +319,68 @@ struct PermissionsStepView: View {
         .padding(16)
         .background(Color(nsColor: .controlBackgroundColor))
         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+    }
+
+    private var startAtLoginPermissionRow: some View {
+        HStack(spacing: 16) {
+            Image(systemName: "power.circle")
+                .font(.system(size: 28))
+                .foregroundStyle(isStartAtLoginEnabled ? .green : .orange)
+                .frame(width: 40)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Start at Login")
+                    .font(.headline)
+                Text("Required so FamilyRules starts automatically after sign-in.")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                Text(startAtLoginStatus)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Spacer()
+
+            if isStartAtLoginEnabled {
+                Label("Granted", systemImage: "checkmark.circle.fill")
+                    .foregroundStyle(.green)
+                    .font(.subheadline.weight(.semibold))
+            } else {
+                Button(isRegisteringStartAtLogin ? "Enabling..." : "Enable Start at Login") {
+                    enableStartAtLogin()
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(isRegisteringStartAtLogin)
+            }
+        }
+        .padding(16)
+        .background(Color(nsColor: .controlBackgroundColor))
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+    }
+
+    private func refreshPermissionState() {
+        isAccessibilityGranted = AccessibilityPermission.isGranted
+        isStartAtLoginEnabled = ServiceManagementBridge.isMainAppEnabled
+        startAtLoginStatus = ServiceManagementBridge.registrationDescription()
+    }
+
+    private func enableStartAtLogin() {
+        guard !isRegisteringStartAtLogin else { return }
+
+        isRegisteringStartAtLogin = true
+        startAtLoginError = nil
+
+        Task { @MainActor in
+            defer {
+                isRegisteringStartAtLogin = false
+                refreshPermissionState()
+            }
+
+            do {
+                try ServiceManagementBridge.registerMainAppIfAvailable()
+            } catch {
+                startAtLoginError = error.localizedDescription
+            }
+        }
     }
 }

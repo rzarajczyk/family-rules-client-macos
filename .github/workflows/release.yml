@@ -36,7 +36,7 @@ jobs:
             -project FamilyRulesClient.xcodeproj \
             -scheme FamilyRulesAgent \
             -configuration Release \
-            -archivePath $RUNNER_TEMP/FamilyRulesAgent.xcarchive \
+            -archivePath $RUNNER_TEMP/FamilyRules.xcarchive \
             CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO \
@@ -44,15 +44,20 @@ jobs:
 
       - name: Copy app from archive
         run: |
-          APP_PATH=$(find $RUNNER_TEMP/FamilyRulesAgent.xcarchive -name "*.app" | head -1)
-          cp -R "$APP_PATH" $RUNNER_TEMP/FamilyRulesAgent.app
-          echo "APP_PATH=$RUNNER_TEMP/FamilyRulesAgent.app" >> $GITHUB_ENV
+          APP_PATH=$(find $RUNNER_TEMP/FamilyRules.xcarchive -name "*.app" | head -1)
+          cp -R "$APP_PATH" $RUNNER_TEMP/FamilyRules.app
+          echo "APP_PATH=$RUNNER_TEMP/FamilyRules.app" >> $GITHUB_ENV
 
       - name: Create DMG installer
         run: |
-          DMG_PATH=$RUNNER_TEMP/FamilyRulesAgent-${{ steps.version.outputs.tag }}.dmg
-          hdiutil create -volname "FamilyRulesAgent" \
-            -srcfolder "$APP_PATH" \
+          STAGING_DIR=$RUNNER_TEMP/FamilyRules-dmg
+          DMG_PATH=$RUNNER_TEMP/FamilyRules-${{ steps.version.outputs.tag }}.dmg
+          rm -rf "$STAGING_DIR"
+          mkdir -p "$STAGING_DIR"
+          cp -R "$APP_PATH" "$STAGING_DIR/FamilyRules.app"
+          ln -s /Applications "$STAGING_DIR/Applications"
+          hdiutil create -volname "Install FamilyRules" \
+            -srcfolder "$STAGING_DIR" \
             -ov -format UDZO \
             "$DMG_PATH"
           echo "DMG_PATH=$DMG_PATH" >> $GITHUB_ENV
@@ -61,9 +66,9 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.version.outputs.tag }}
-          name: "FamilyRulesAgent ${{ steps.version.outputs.version }} (build ${{ github.run_number }})"
+          name: "FamilyRules ${{ steps.version.outputs.version }} (build ${{ github.run_number }})"
           body: |
-            ## FamilyRulesAgent ${{ steps.version.outputs.version }}
+            ## FamilyRules ${{ steps.version.outputs.version }}
 
             Built from commit ${{ github.sha }}
 

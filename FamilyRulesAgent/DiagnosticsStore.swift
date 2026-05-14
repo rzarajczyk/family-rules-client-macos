@@ -143,6 +143,14 @@ enum AgentPersistencePaths {
 }
 
 enum ServiceManagementBridge {
+    static var isMainAppEnabled: Bool {
+        guard #available(macOS 13.0, *) else {
+            return false
+        }
+
+        return SMAppService.mainApp.status == .enabled
+    }
+
     static func registrationDescription() -> String {
         if #available(macOS 13.0, *) {
             return "mainApp: \(SMAppService.mainApp.status.description)"

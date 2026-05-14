@@ -186,8 +186,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             let hostingController = NSHostingController(rootView: SetupView(
                 appModel: appModel,
                 startingStep: .registration,
-                onRegistered: { [weak self] in self?.handleRegistrationCompleted() },
-                onFinished: { [weak self] in self?.setupWindowController?.close() }
+                onFinished: { [weak self] in self?.handleSetupCompleted() }
             ))
             let window = NSWindow(contentViewController: hostingController)
             window.title = String.localized("FamilyRules Setup")
@@ -473,7 +472,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         return false
     }
 
-    private func handleRegistrationCompleted() {
+    private func handleSetupCompleted() {
+        setupWindowController?.close()
+
         if let registration = appModel.registration {
             Task {
                 await syncController.start(registration: registration)
@@ -482,10 +483,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         allDevicesLastRefreshedAt = Date()
         allDevicesModel.refresh(registration: appModel.registration)
-        openDiagnosticsWindow()
         openDashboardWindow()
-        // Setup window stays open so the user can complete step 2 (permissions).
-        // It will be closed when they tap Done on the permissions step.
     }
 
     private func startSwitchUserTest() {

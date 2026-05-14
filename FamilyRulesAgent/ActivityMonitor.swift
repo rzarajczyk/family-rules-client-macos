@@ -86,6 +86,13 @@ struct UsageAccumulator {
             applicationUsageSeconds = persistedState.applicationUsageSeconds
             visibleApplicationUsageSeconds = persistedState.visibleApplicationUsageSeconds
             knownApps = persistedState.knownApps
+
+            // On process restart, preserve visibility for the current frontmost app
+            // until the next reconcile pass can rebuild the exact visible window set.
+            if let currentApp,
+               persistedState.visibleApplicationUsageSeconds[currentApp.identifier] != nil {
+                currentlyVisibleAppIDs = [currentApp.identifier]
+            }
         }
 
         if let currentApp {

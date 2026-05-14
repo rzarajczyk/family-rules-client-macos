@@ -15,7 +15,7 @@ final class DeviceStateControllerTests: XCTestCase {
         try await Task.sleep(for: .milliseconds(50))
 
         XCTAssertEqual(controller.normalizedState, "LOCK_SCREEN")
-        XCTAssertEqual(controller.statusDescription, "Screen Locked")
+        XCTAssertEqual(controller.statusDescription, String.localized("Screen Locked"))
         XCTAssertNil(controller.countdownPresentation)
         let requests = await helperClient.recordedRequests()
         XCTAssertTrue(requests.isEmpty)
@@ -25,6 +25,7 @@ final class DeviceStateControllerTests: XCTestCase {
         let helperClient = HelperLifecycleClientActionStub()
         let controller = DeviceStateController(
             helperClient: helperClient,
+            sessionActionExecutor: { _ in nil },
             countdownDurationProvider: { _, extra in Int(extra ?? "") ?? 60 },
             sleep: { _ in }
         )
@@ -77,7 +78,10 @@ final class DeviceStateControllerTests: XCTestCase {
         controller.apply(rawState: "LOCK_SCREEN_WITH_TIMEOUT", extra: nil)
 
         XCTAssertEqual(controller.countdownPresentation?.secondsRemaining, 43)
-        XCTAssertEqual(controller.statusDescription, "Locking in 43s")
+        XCTAssertEqual(
+            controller.statusDescription,
+            String(format: String.localized("Locking in %ds"), 43)
+        )
     }
 
     private func waitForRequestCount(_ stub: HelperLifecycleClientActionStub, count: Int, timeout: TimeInterval = 2) async throws {
