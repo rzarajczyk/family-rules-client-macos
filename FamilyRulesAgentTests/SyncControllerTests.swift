@@ -1,5 +1,5 @@
 import XCTest
-@testable import FamilyRulesAgent
+@testable import FamilyRules
 
 @MainActor
 final class SyncControllerTests: XCTestCase {
@@ -156,10 +156,12 @@ final class SyncControllerTests: XCTestCase {
             blockedApps: [BlockedAppPayload(appPath: "com.blocked.app", appName: "Blocked App")]
         )
         let lifecycleController = LifecycleControllerStub()
+        let playbackBlocker = PlaybackBlockerStub()
         let controller = SyncController(
             activityMonitor: activityMonitor,
             syncClient: client,
             lifecycleController: lifecycleController,
+            playbackBlocker: playbackBlocker,
             appVersionProvider: { "1.0.0" },
             timezoneProvider: { 0 },
             automaticLoops: false
@@ -170,8 +172,14 @@ final class SyncControllerTests: XCTestCase {
         XCTAssertEqual(controller.blockedAppIdentifiers, ["com.blocked.app"])
         XCTAssertEqual(controller.blockedAppNames["com.blocked.app"], "Blocked App")
         let blockedAppsFetchCount = await client.blockedAppsFetchCount()
+        let blockedPlaybackAppsFetchCount = await client.blockedPlaybackAppsFetchCount()
+        let playbackUpdateCount = await playbackBlocker.updateConfigurationCallCount()
+        let playbackEnabled = await playbackBlocker.lastEnabledValue()
         XCTAssertEqual(blockedAppsFetchCount, 1)
+        XCTAssertEqual(blockedPlaybackAppsFetchCount, 1)
         XCTAssertTrue(lifecycleController.restrictedAppBlockingEnabled)
+        XCTAssertEqual(playbackUpdateCount, 1)
+        XCTAssertEqual(playbackEnabled, true)
     }
 
     func testLeavingRestrictedAppStateClearsBlockedAppCache() async throws {
@@ -191,21 +199,78 @@ final class SyncControllerTests: XCTestCase {
             blockedApps: [BlockedAppPayload(appPath: "com.blocked.app", appName: "Blocked App")]
         )
         let lifecycleController = LifecycleControllerStub()
+        let playbackBlocker = PlaybackBlockerStub()
         let controller = SyncController(
             activityMonitor: activityMonitor,
             syncClient: client,
             lifecycleController: lifecycleController,
+            playbackBlocker: playbackBlocker,
             appVersionProvider: { "1.0.0" },
             timezoneProvider: { 0 },
             automaticLoops: false
         )
 
         await controller.start(registration: registration)
+        let clearCountAfterStart = await playbackBlocker.clearCallCount()
         await client.setReportResponse(ReportResponsePayload(deviceState: "ACTIVE", extra: nil, serverCommands: []))
         await controller.sendReportIfEligible(reason: "manual")
 
+        let playbackClearCount = await playbackBlocker.clearCallCount()
+        let playbackEnabled = await playbackBlocker.lastEnabledValue()
         XCTAssertTrue(controller.blockedAppIdentifiers.isEmpty)
         XCTAssertTrue(controller.blockedAppNames.isEmpty)
+        XCTAssertEqual(playbackClearCount, clearCountAfterStart + 1)
+        XCTAssertEqual(playbackEnabled, false)
+    }
+
+    func testRestrictedAppTimeoutStateFetchesPlaybackAppsButKeepsPlaybackBlockingDisabledUntilCountdownCompletes() async throws {
+        let activityMonitor = ActivityMonitorStub(
+            snapshotValue: UsageSnapshot(
+                screenTimeSeconds: 30,
+                applications: ["com.apple.finder": 30],
+                activeApps: ["com.apple.finder"],
+                visibleApplications: ["com.apple.finder": 30],
+                visibleApps: ["com.apple.finder"],
+                knownApps: ["com.apple.finder": KnownAppInfo(identifier: "com.apple.finder", name: "Finder")],
+                isEligibleForReporting: true
+            )
+        )
+        let client = ServerSyncClientStub(
+            reportResponse: ReportResponsePayload(deviceState: "BLOCK_RESTRICTED_APPS_WITH_TIMEOUT", extra: "30", serverCommands: []),
+            blockedApps: [BlockedAppPayload(appPath: "com.blocked.app", appName: "Blocked App")],
+            blockedPlaybackApps: [BlockedAppPayload(appPath: "com.microsoft.edgemac", appName: "Microsoft Edge")]
+        )
+        let lifecycleController = LifecycleControllerStub()
+        let playbackBlocker = PlaybackBlockerStub()
+        let controller = SyncController(
+            activityMonitor: activityMonitor,
+            syncClient: client,
+            lifecycleController: lifecycleController,
+            playbackBlocker: playbackBlocker,
+            appVersionProvider: { "1.0.0" },
+            timezoneProvider: { 0 },
+            automaticLoops: false
+        )
+
+        await controller.start(registration: registration)
+
+        let playbackInitiallyEnabled = await playbackBlocker.lastEnabledValue()
+        let blockedPlaybackIdentifiers = await playbackBlocker.lastBlockedApplicationIdentifiers()
+        XCTAssertEqual(playbackInitiallyEnabled, false)
+        XCTAssertEqual(blockedPlaybackIdentifiers, ["com.microsoft.edgemac"])
+
+        lifecycleController.triggerRestrictedAppBlockingActivated()
+        for _ in 0..<10 {
+            if await playbackBlocker.setEnabledCallCount() > 0 {
+                break
+            }
+            await Task.yield()
+        }
+
+        let playbackEnabledAfterCountdown = await playbackBlocker.lastEnabledValue()
+        let playbackEnforcementCount = await playbackBlocker.enforceIfNeededCallCount()
+        XCTAssertEqual(playbackEnabledAfterCountdown, true)
+        XCTAssertEqual(playbackEnforcementCount, 1)
     }
 
     func testRestrictedAppEnforcementStatePersistsOverlayUntilAppStopsBeingVisible() {
@@ -424,10 +489,12 @@ private actor ServerSyncClientStub: ServerSyncClientProtocol {
     private var clientInfoCount = 0
     private var reportCount = 0
     private var blockedAppsCount = 0
+    private var blockedPlaybackAppsCount = 0
     private var commandAckCount = 0
     private var commandResultCount = 0
     private var reportResponse: ReportResponsePayload
     private let blockedApps: [BlockedAppPayload]
+    private let blockedPlaybackApps: [BlockedAppPayload]
     private var lastClientInfoPayloadValue: ClientInfoPayload?
     private var lastCommandAcksPayloadValue: CommandAcksUploadPayload?
     private var lastCommandResultsPayloadValue: CommandResultsUploadPayload?
@@ -436,10 +503,12 @@ private actor ServerSyncClientStub: ServerSyncClientProtocol {
     init(
         reportResponse: ReportResponsePayload = ReportResponsePayload(deviceState: "ACTIVE", extra: nil, serverCommands: []),
         blockedApps: [BlockedAppPayload] = [],
+        blockedPlaybackApps: [BlockedAppPayload] = [],
         failCommandAckUploads: Int = 0
     ) {
         self.reportResponse = reportResponse
         self.blockedApps = blockedApps
+        self.blockedPlaybackApps = blockedPlaybackApps
         self.remainingCommandAckFailures = failCommandAckUploads
     }
 
@@ -456,6 +525,11 @@ private actor ServerSyncClientStub: ServerSyncClientProtocol {
     func fetchBlockedApps(registration: RegistrationRecord) async throws -> [BlockedAppPayload] {
         blockedAppsCount += 1
         return blockedApps
+    }
+
+    func fetchBlockedPlaybackApps(registration: RegistrationRecord) async throws -> [BlockedAppPayload] {
+        blockedPlaybackAppsCount += 1
+        return blockedPlaybackApps
     }
 
     func sendCommandAcks(_ payload: CommandAcksUploadPayload, registration: RegistrationRecord) async throws {
@@ -487,6 +561,10 @@ private actor ServerSyncClientStub: ServerSyncClientProtocol {
 
     func blockedAppsFetchCount() -> Int {
         blockedAppsCount
+    }
+
+    func blockedPlaybackAppsFetchCount() -> Int {
+        blockedPlaybackAppsCount
     }
 
     func lastCommandAcksPayload() -> CommandAcksUploadPayload? {
@@ -612,6 +690,7 @@ private final class LifecycleControllerStub: LifecycleControlling {
     private(set) var helperStatusDescription = "Unknown"
     private(set) var countdownPresentation: StateCountdownPresentation?
     private(set) var restrictedAppBlockingEnabled = false
+    var onRestrictedAppBlockingActivated: (() -> Void)?
     private(set) var shouldPresentCompactCountdown = false
     private(set) var shouldEnforceSwitchUserLoop = false
 
@@ -638,7 +717,66 @@ private final class LifecycleControllerStub: LifecycleControlling {
 
     func refreshDiagnostics() async {}
 
+    func triggerRestrictedAppBlockingActivated() {
+        restrictedAppBlockingEnabled = true
+        onRestrictedAppBlockingActivated?()
+    }
+
     func markAdminDisabledFromServerState() {
         updateServerDeviceState("APP_DISABLED", extra: nil)
+    }
+}
+
+private actor PlaybackBlockerStub: PlaybackBlockingProtocol {
+    private var updateCalls = 0
+    private var setEnabledCalls = 0
+    private var clearCalls = 0
+    private var enforceCalls = 0
+    private var enabled = false
+    private var blockedApplicationIdentifiers: Set<String> = []
+
+    func updateConfiguration(enabled: Bool, blockedApplications: [BlockedAppPayload]) async {
+        updateCalls += 1
+        self.enabled = enabled
+        blockedApplicationIdentifiers = Set(blockedApplications.map(\.appPath))
+    }
+
+    func setEnabled(_ enabled: Bool) async {
+        setEnabledCalls += 1
+        self.enabled = enabled
+    }
+
+    func clear() async {
+        clearCalls += 1
+        enabled = false
+        blockedApplicationIdentifiers = []
+    }
+
+    func enforceIfNeeded() async {
+        enforceCalls += 1
+    }
+
+    func updateConfigurationCallCount() -> Int {
+        updateCalls
+    }
+
+    func setEnabledCallCount() -> Int {
+        setEnabledCalls
+    }
+
+    func clearCallCount() -> Int {
+        clearCalls
+    }
+
+    func enforceIfNeededCallCount() -> Int {
+        enforceCalls
+    }
+
+    func lastEnabledValue() -> Bool {
+        enabled
+    }
+
+    func lastBlockedApplicationIdentifiers() -> Set<String> {
+        blockedApplicationIdentifiers
     }
 }

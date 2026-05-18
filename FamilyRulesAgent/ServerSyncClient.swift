@@ -4,6 +4,7 @@ protocol ServerSyncClientProtocol: Actor {
     func sendClientInfo(_ payload: ClientInfoPayload, registration: RegistrationRecord) async throws
     func sendReport(_ payload: ReportPayload, registration: RegistrationRecord) async throws -> ReportResponsePayload
     func fetchBlockedApps(registration: RegistrationRecord) async throws -> [BlockedAppPayload]
+    func fetchBlockedPlaybackApps(registration: RegistrationRecord) async throws -> [BlockedAppPayload]
     func sendCommandAcks(_ payload: CommandAcksUploadPayload, registration: RegistrationRecord) async throws
     func sendCommandResults(_ payload: CommandResultsUploadPayload, registration: RegistrationRecord) async throws
 }
@@ -47,6 +48,20 @@ actor ServerSyncClient {
 
     func fetchBlockedApps(registration: RegistrationRecord) async throws -> [BlockedAppPayload] {
         let endpoint = try endpointURL(serverURL: registration.serverURL, path: "get-blocked-apps")
+        var request = authorizedRequest(url: endpoint, registration: registration)
+        request.httpBody = try encoder.encode(EmptyRequestBody())
+
+        let (data, response) = try await session.data(for: request)
+        let httpResponse = try validate(response: response)
+        guard httpResponse.statusCode == 200 else {
+            throw ServerSyncClientError.requestFailed(statusCode: httpResponse.statusCode)
+        }
+
+        return try decoder.decode(BlockedAppsResponsePayload.self, from: data).apps
+    }
+
+    func fetchBlockedPlaybackApps(registration: RegistrationRecord) async throws -> [BlockedAppPayload] {
+        let endpoint = try endpointURL(serverURL: registration.serverURL, path: "get-blocked-playback-apps")
         var request = authorizedRequest(url: endpoint, registration: registration)
         request.httpBody = try encoder.encode(EmptyRequestBody())
 

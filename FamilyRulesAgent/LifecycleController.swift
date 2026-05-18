@@ -9,6 +9,7 @@ protocol LifecycleControlling: AnyObject {
     var helperStatusDescription: String { get }
     var countdownPresentation: StateCountdownPresentation? { get }
     var restrictedAppBlockingEnabled: Bool { get }
+    var onRestrictedAppBlockingActivated: (() -> Void)? { get set }
     var shouldPresentCompactCountdown: Bool { get }
     var shouldEnforceSwitchUserLoop: Bool { get }
     func start(registration: RegistrationRecord)
@@ -42,6 +43,11 @@ final class LifecycleController: ObservableObject, LifecycleControlling {
 
     var restrictedAppBlockingEnabled: Bool {
         deviceStateController.restrictedAppBlockingEnabled
+    }
+
+    var onRestrictedAppBlockingActivated: (() -> Void)? {
+        get { deviceStateController.onRestrictedAppBlockingActivated }
+        set { deviceStateController.onRestrictedAppBlockingActivated = newValue }
     }
 
     var shouldPresentCompactCountdown: Bool {

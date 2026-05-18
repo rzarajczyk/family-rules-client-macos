@@ -1,5 +1,5 @@
 import XCTest
-@testable import FamilyRulesAgent
+@testable import FamilyRules
 
 final class ServerSyncClientTests: XCTestCase {
     override class func setUp() {
@@ -157,6 +157,24 @@ final class ServerSyncClientTests: XCTestCase {
             ),
             registration: registration
         )
+    }
+
+    func testFetchBlockedPlaybackAppsUsesExpectedEndpointAndParsesResponse() async throws {
+        let client = ServerSyncClient(session: makeSession())
+
+        ServerSyncMockURLProtocol.handler = { request in
+            XCTAssertEqual(request.url?.absoluteString, "https://example.com/api/v2/get-blocked-playback-apps")
+            XCTAssertEqual(request.httpMethod, "POST")
+            XCTAssertEqual(request.value(forHTTPHeaderField: "Authorization"), "Basic aW5zdGFuY2UtMTp0b2tlbi0x")
+
+            let response = HTTPURLResponse(url: try XCTUnwrap(request.url), statusCode: 200, httpVersion: nil, headerFields: nil)!
+            let data = Data(#"{"apps":[{"appPath":"com.microsoft.edgemac","appName":"Microsoft Edge"}]}"#.utf8)
+            return (response, data)
+        }
+
+        let apps = try await client.fetchBlockedPlaybackApps(registration: registration)
+
+        XCTAssertEqual(apps, [BlockedAppPayload(appPath: "com.microsoft.edgemac", appName: "Microsoft Edge")])
     }
 
     private func makeSession() -> URLSession {

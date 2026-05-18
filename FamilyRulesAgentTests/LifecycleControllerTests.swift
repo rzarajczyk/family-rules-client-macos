@@ -1,5 +1,5 @@
 import XCTest
-@testable import FamilyRulesAgent
+@testable import FamilyRules
 
 @MainActor
 final class LifecycleControllerTests: XCTestCase {
@@ -269,6 +269,7 @@ private final class DeviceStateControllerStub: DeviceStateControlling {
     var statusDescription: String
     var countdownPresentation: StateCountdownPresentation?
     var restrictedAppBlockingEnabled = false
+    var onRestrictedAppBlockingActivated: (() -> Void)?
     var shouldPresentCompactCountdown = false
     var shouldEnforceSwitchUserLoop = false
 

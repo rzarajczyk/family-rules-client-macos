@@ -18,6 +18,7 @@ final class SyncController: ObservableObject {
     private let activityMonitor: any ActivityMonitorProtocol
     private let syncClient: any ServerSyncClientProtocol
     private let lifecycleController: (any LifecycleControlling)?
+    private let playbackBlocker: any PlaybackBlockingProtocol
     private let commandStore: any ServerCommandStoreProtocol
     private let diagnosticsLogStore: any DiagnosticsLogStoreProtocol
     private let appVersionProvider: () -> String
@@ -33,12 +34,14 @@ final class SyncController: ObservableObject {
     private var isSendingClientInfo = false
     private var isSendingReport = false
     private var isFetchingBlockedApps = false
+    private var isFetchingBlockedPlaybackApps = false
     private var isProcessingCommands = false
 
     init(
         activityMonitor: any ActivityMonitorProtocol,
         syncClient: any ServerSyncClientProtocol = ServerSyncClient(),
         lifecycleController: (any LifecycleControlling)? = nil,
+        playbackBlocker: any PlaybackBlockingProtocol = PlaybackBlocker(),
         commandStore: any ServerCommandStoreProtocol = SQLiteServerCommandStore(),
         diagnosticsLogStore: any DiagnosticsLogStoreProtocol = DiagnosticsLogStore(),
         appVersionProvider: @escaping () -> String = SyncController.defaultAppVersion,
@@ -53,6 +56,7 @@ final class SyncController: ObservableObject {
         self.activityMonitor = activityMonitor
         self.syncClient = syncClient
         self.lifecycleController = lifecycleController
+        self.playbackBlocker = playbackBlocker
         self.commandStore = commandStore
         self.diagnosticsLogStore = diagnosticsLogStore
         self.appVersionProvider = appVersionProvider
@@ -69,6 +73,10 @@ final class SyncController: ObservableObject {
 
         self.registration = registration
         lifecycleController?.start(registration: registration)
+        lifecycleController?.onRestrictedAppBlockingActivated = { [weak self] in
+            guard let self else { return }
+            Task { await self.handleRestrictedAppBlockingActivated() }
+        }
         syncStatus = "Starting"
         // Load persisted diagnostics state now that we are starting (not in init).
         refreshDiagnosticsState()
@@ -106,9 +114,13 @@ final class SyncController: ObservableObject {
         reportTask = nil
         registration = nil
         activityMonitor.onKnownAppsChanged = nil
+        lifecycleController?.onRestrictedAppBlockingActivated = nil
         lifecycleController?.stop()
         blockedAppIdentifiers = []
         blockedAppNames = [:]
+        Task {
+            await playbackBlocker.clear()
+        }
 
         if syncStatus != "Idle" {
             syncStatus = "Idle"
@@ -265,6 +277,7 @@ final class SyncController: ObservableObject {
             lastDeviceState = response.deviceState
             lifecycleController?.updateServerDeviceState(response.deviceState, extra: response.extra)
             await refreshBlockedAppsIfNeeded(reason: reason, deviceState: response.deviceState)
+            await refreshBlockedPlaybackAppsIfNeeded(reason: reason, deviceState: response.deviceState)
             try storeIncomingCommands(response.serverCommands, reason: reason)
             lastErrorMessage = nil
             syncStatus = lifecycleController?.isAdminDisabled == true ? "Admin Disabled" : "Healthy"
@@ -318,6 +331,54 @@ final class SyncController: ObservableObject {
             DiagnosticsLogger.record(error: error, context: "Blocked-app fetch failed")
             recordLog("Blocked-app fetch failed (\(reason)): \(error.localizedDescription)")
         }
+    }
+
+    private func refreshBlockedPlaybackAppsIfNeeded(reason: String, deviceState: String) async {
+        guard let registration else { return }
+
+        let normalized = LifecycleStateBridge.normalize(deviceState)
+        let shouldFetch = normalized == "BLOCK_RESTRICTED_APPS" || normalized == "BLOCK_RESTRICTED_APPS_WITH_TIMEOUT"
+        let shouldEnablePlaybackBlocking = lifecycleController?.restrictedAppBlockingEnabled ?? (normalized == "BLOCK_RESTRICTED_APPS")
+
+        guard shouldFetch else {
+            await playbackBlocker.clear()
+            return
+        }
+
+        if isFetchingBlockedPlaybackApps {
+            await playbackBlocker.setEnabled(shouldEnablePlaybackBlocking)
+            if shouldEnablePlaybackBlocking {
+                await playbackBlocker.enforceIfNeeded()
+            }
+            return
+        }
+
+        isFetchingBlockedPlaybackApps = true
+        defer { isFetchingBlockedPlaybackApps = false }
+
+        do {
+            let apps = try await syncClient.fetchBlockedPlaybackApps(registration: registration)
+            await playbackBlocker.updateConfiguration(enabled: shouldEnablePlaybackBlocking, blockedApplications: apps)
+            if shouldEnablePlaybackBlocking {
+                await playbackBlocker.enforceIfNeeded()
+            }
+            recordLog("Fetched blocked playback apps (\(reason)) count=\(apps.count), enabled=\(shouldEnablePlaybackBlocking)")
+        } catch {
+            lastErrorMessage = error.localizedDescription
+            await playbackBlocker.setEnabled(shouldEnablePlaybackBlocking)
+            if shouldEnablePlaybackBlocking {
+                await playbackBlocker.enforceIfNeeded()
+            }
+            DiagnosticsLogger.record(error: error, context: "Blocked-playback-app fetch failed")
+            recordLog("Blocked-playback-app fetch failed (\(reason)): \(error.localizedDescription)")
+        }
+    }
+
+    private func handleRestrictedAppBlockingActivated() async {
+        guard registration != nil else { return }
+        await playbackBlocker.setEnabled(true)
+        await playbackBlocker.enforceIfNeeded()
+        recordLog("Enabled playback blocking after restricted-app countdown")
     }
 
     private func processPendingCommands(reason: String) async {

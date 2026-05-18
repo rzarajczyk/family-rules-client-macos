@@ -6,6 +6,7 @@ protocol DeviceStateControlling: AnyObject {
     var statusDescription: String { get }
     var countdownPresentation: StateCountdownPresentation? { get }
     var restrictedAppBlockingEnabled: Bool { get }
+    var onRestrictedAppBlockingActivated: (() -> Void)? { get set }
     var shouldPresentCompactCountdown: Bool { get }
     var shouldEnforceSwitchUserLoop: Bool { get }
     func apply(rawState: String, extra: String?)
@@ -18,6 +19,7 @@ final class DeviceStateController: ObservableObject, DeviceStateControlling {
     @Published private(set) var statusDescription = "Active"
     @Published private(set) var countdownPresentation: StateCountdownPresentation?
     @Published private(set) var restrictedAppBlockingEnabled = false
+    var onRestrictedAppBlockingActivated: (() -> Void)?
     @Published private(set) var shouldPresentCompactCountdown = false
     @Published private(set) var shouldEnforceSwitchUserLoop = false
 
@@ -159,6 +161,7 @@ final class DeviceStateController: ObservableObject, DeviceStateControlling {
                 self.normalizedState = "BLOCK_RESTRICTED_APPS"
                 self.statusDescription = "Blocking Restricted Apps"
                 self.restrictedAppBlockingEnabled = true
+                self.onRestrictedAppBlockingActivated?()
             case "LOCK_SCREEN_WITH_TIMEOUT":
                 self.normalizedState = "LOCK_SCREEN"
                 self.statusDescription = String.localized("Screen Locked")

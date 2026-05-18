@@ -1,5 +1,5 @@
 import XCTest
-@testable import FamilyRulesAgent
+@testable import FamilyRules
 
 @MainActor
 final class DeviceStateControllerTests: XCTestCase {
