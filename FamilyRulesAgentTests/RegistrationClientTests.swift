@@ -22,12 +22,12 @@ final class RegistrationClientTests: XCTestCase {
         let client = RegistrationClient(session: session)
 
         MockURLProtocol.handler = { request in
-            XCTAssertEqual(request.url?.absoluteString, "https://example.com/api/v2/register-instance")
-            XCTAssertEqual(request.httpMethod, "POST")
-            XCTAssertEqual(request.value(forHTTPHeaderField: "Content-Type"), "application/json")
-            XCTAssertEqual(request.value(forHTTPHeaderField: "Authorization"), "Basic cGFyZW50OnNlY3JldA==")
+            try requireEqual(request.url?.absoluteString, "https://example.com/api/v2/register-instance")
+            try requireEqual(request.httpMethod, "POST")
+            try requireEqual(request.value(forHTTPHeaderField: "Content-Type"), "application/json")
+            try requireEqual(request.value(forHTTPHeaderField: "Authorization"), "Basic cGFyZW50OnNlY3JldA==")
 
-            let response = HTTPURLResponse(url: try XCTUnwrap(request.url), statusCode: 200, httpVersion: nil, headerFields: nil)!
+            let response = HTTPURLResponse(url: try requireValue(request.url, "Missing request URL"), statusCode: 200, httpVersion: nil, headerFields: nil)!
             let data = Data(#"{"status":"SUCCESS","instanceId":"uuid-1","token":"token-1"}"#.utf8)
             return (response, data)
         }
@@ -56,7 +56,7 @@ final class RegistrationClientTests: XCTestCase {
             let client = RegistrationClient(session: session)
 
             MockURLProtocol.handler = { request in
-                let response = HTTPURLResponse(url: try XCTUnwrap(request.url), statusCode: 200, httpVersion: nil, headerFields: nil)!
+                let response = HTTPURLResponse(url: try requireValue(request.url, "Missing request URL"), statusCode: 200, httpVersion: nil, headerFields: nil)!
                 return (response, Data(payload.utf8))
             }
 
@@ -94,11 +94,11 @@ final class RegistrationClientTests: XCTestCase {
         let client = RegistrationClient(session: makeSession())
 
         MockURLProtocol.handler = { request in
-            XCTAssertEqual(request.url?.absoluteString, "https://example.com/api/v2/unregister-instance")
-            XCTAssertEqual(request.httpMethod, "POST")
-            XCTAssertEqual(request.value(forHTTPHeaderField: "Authorization"), "Basic aW5zdGFuY2UtMTp0b2tlbi0x")
+            try requireEqual(request.url?.absoluteString, "https://example.com/api/v2/unregister-instance")
+            try requireEqual(request.httpMethod, "POST")
+            try requireEqual(request.value(forHTTPHeaderField: "Authorization"), "Basic aW5zdGFuY2UtMTp0b2tlbi0x")
 
-            let response = HTTPURLResponse(url: try XCTUnwrap(request.url), statusCode: 200, httpVersion: nil, headerFields: nil)!
+            let response = HTTPURLResponse(url: try requireValue(request.url, "Missing request URL"), statusCode: 200, httpVersion: nil, headerFields: nil)!
             let data = Data(#"{"status":"SUCCESS"}"#.utf8)
             return (response, data)
         }
@@ -126,7 +126,7 @@ final class RegistrationClientTests: XCTestCase {
         let client = RegistrationClient(session: makeSession())
 
         MockURLProtocol.handler = { request in
-            let response = HTTPURLResponse(url: try XCTUnwrap(request.url), statusCode: 500, httpVersion: nil, headerFields: nil)!
+            let response = HTTPURLResponse(url: try requireValue(request.url, "Missing request URL"), statusCode: 500, httpVersion: nil, headerFields: nil)!
             return (response, Data())
         }
 
@@ -147,7 +147,7 @@ final class RegistrationClientTests: XCTestCase {
         let client = RegistrationClient(session: makeSession())
 
         MockURLProtocol.handler = { request in
-            let response = HTTPURLResponse(url: try XCTUnwrap(request.url), statusCode: 200, httpVersion: nil, headerFields: nil)!
+            let response = HTTPURLResponse(url: try requireValue(request.url, "Missing request URL"), statusCode: 200, httpVersion: nil, headerFields: nil)!
             // SUCCESS status but no instanceId or token fields.
             let data = Data(#"{"status":"SUCCESS"}"#.utf8)
             return (response, data)
@@ -186,7 +186,7 @@ final class RegistrationClientTests: XCTestCase {
         let client = RegistrationClient(session: makeSession())
 
         MockURLProtocol.handler = { request in
-            let response = HTTPURLResponse(url: try XCTUnwrap(request.url), statusCode: 403, httpVersion: nil, headerFields: nil)!
+            let response = HTTPURLResponse(url: try requireValue(request.url, "Missing request URL"), statusCode: 403, httpVersion: nil, headerFields: nil)!
             return (response, Data())
         }
 
@@ -203,11 +203,11 @@ final class RegistrationClientTests: XCTestCase {
         let client = RegistrationClient(session: makeSession())
 
         MockURLProtocol.handler = { request in
-            XCTAssertEqual(request.url?.absoluteString, "https://example.com/api/v2/groups-usage-report")
-            XCTAssertEqual(request.httpMethod, "POST")
-            XCTAssertEqual(request.value(forHTTPHeaderField: "Authorization"), "Basic aW5zdGFuY2UtMTp0b2tlbi0x")
+            try requireEqual(request.url?.absoluteString, "https://example.com/api/v2/groups-usage-report")
+            try requireEqual(request.httpMethod, "POST")
+            try requireEqual(request.value(forHTTPHeaderField: "Authorization"), "Basic aW5zdGFuY2UtMTp0b2tlbi0x")
 
-            let response = HTTPURLResponse(url: try XCTUnwrap(request.url), statusCode: 200, httpVersion: nil, headerFields: nil)!
+            let response = HTTPURLResponse(url: try requireValue(request.url, "Missing request URL"), statusCode: 200, httpVersion: nil, headerFields: nil)!
             let data = Data(#"{"groups":[{"groupName":"Social","totalTimeSeconds":3600,"memberApps":[{"name":"Discord","instanceName":"Desk Mac","duration":1800,"icon":"aWNvbg=="}]}]}"#.utf8)
             return (response, data)
         }
@@ -268,4 +268,29 @@ private final class MockURLProtocol: URLProtocol {
     }
 
     override func stopLoading() {}
+}
+
+private struct TestFailure: LocalizedError {
+    let message: String
+
+    init(_ message: String) {
+        self.message = message
+    }
+
+    var errorDescription: String? {
+        message
+    }
+}
+
+private func requireEqual<T: Equatable>(_ actual: T, _ expected: T, _ message: String? = nil) throws {
+    guard actual == expected else {
+        throw TestFailure(message ?? "Expected \(expected), got \(actual)")
+    }
+}
+
+private func requireValue<T>(_ value: T?, _ message: String) throws -> T {
+    guard let value else {
+        throw TestFailure(message)
+    }
+    return value
 }

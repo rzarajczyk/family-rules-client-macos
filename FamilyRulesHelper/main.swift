@@ -7,6 +7,7 @@ final class HelperDelegate: NSObject, NSXPCListenerDelegate, FamilyRulesHelperXP
     private let dateFormatter = ISO8601DateFormatter()
     private let stateStore = HelperStateStore()
     private let serverClient = HelperServerStateClient()
+    private let playbackProbe = HelperMediaRemotePlaybackProbe()
     private let clock: () -> Date
     /// Serializes all mutable state access. XPC callbacks arrive on arbitrary
     /// threads; this queue ensures HelperStateStore and reactivationTimer are
@@ -58,6 +59,29 @@ final class HelperDelegate: NSObject, NSXPCListenerDelegate, FamilyRulesHelperXP
                 reply(data, nil)
             } catch {
                 DiagnosticsLogger.record(error: error, context: "Helper failed to encode lifecycle status")
+                reply(nil, error.localizedDescription)
+            }
+        }
+    }
+
+    func fetchPlaybackSnapshot(_ reply: @escaping (Data?, String?) -> Void) {
+        DiagnosticsLogger.record("Helper fetchPlaybackSnapshot entry")
+        queue.async { [self] in
+            do {
+                DiagnosticsLogger.record("Helper fetchPlaybackSnapshot called")
+                let payload = playbackProbe.snapshot().map {
+                    HelperPlaybackSnapshotPayload(
+                        identifier: $0.identifier,
+                        name: $0.name,
+                        pid: $0.pid,
+                        isPlaying: $0.isPlaying
+                    )
+                }
+                DiagnosticsLogger.record("Helper fetchPlaybackSnapshot result: \(payload.map { $0.identifier } ?? "nil")")
+                let data = try payload.map { try JSONEncoder().encode($0) }
+                reply(data, nil)
+            } catch {
+                DiagnosticsLogger.record(error: error, context: "Helper failed to fetch playback snapshot")
                 reply(nil, error.localizedDescription)
             }
         }
@@ -421,10 +445,14 @@ private struct ReportResponsePayload: Decodable {
 /// A minimal zeroed report payload used by the helper when polling the server
 /// for device state during reactivation checks.  Keeping this as a typed struct
 /// ensures the JSON shape stays in sync with the server contract.
+///
+/// The full agent-side equivalent is `ReportPayload` in
+/// `FamilyRulesAgent/ServerSyncClient.swift`.
 private struct HelperZeroedReportPayload: Encodable {
     let screenTime: Int = 0
     let applications: [String: Int] = [:]
     let activeApps: [String] = []
+    let mediaPlayingApps: [String] = []
 }
 
 private enum HelperServerStateError: LocalizedError {
@@ -464,5 +492,90 @@ private enum HelperActionError: LocalizedError {
         case let .targetNotRunning(identifier):
             return "The helper could not find a running app for \(identifier)."
         }
+    }
+}
+
+private struct HelperPlaybackSnapshot {
+    let identifier: String
+    let name: String?
+    let pid: pid_t?
+    let isPlaying: Bool
+}
+
+private final class HelperMediaRemotePlaybackProbe {
+    private typealias MRGetNowPlayingApplicationPID = @convention(c) (DispatchQueue, @escaping @convention(block) (Int32) -> Void) -> Void
+    private typealias MRGetNowPlayingApplicationIsPlaying = @convention(c) (DispatchQueue, @escaping @convention(block) (Bool) -> Void) -> Void
+
+    private let getNowPlayingApplicationPID: MRGetNowPlayingApplicationPID?
+    private let getNowPlayingApplicationIsPlaying: MRGetNowPlayingApplicationIsPlaying?
+    private let callbackQueue = DispatchQueue(label: "com.familyrules.helper.mediaremote")
+
+    init() {
+        let path = "/System/Library/PrivateFrameworks/MediaRemote.framework/MediaRemote"
+        guard let handle = dlopen(path, RTLD_NOW) else {
+            getNowPlayingApplicationPID = nil
+            getNowPlayingApplicationIsPlaying = nil
+            return
+        }
+
+        if let sym = dlsym(handle, "MRMediaRemoteGetNowPlayingApplicationPID") {
+            getNowPlayingApplicationPID = unsafeBitCast(sym, to: MRGetNowPlayingApplicationPID.self)
+        } else {
+            getNowPlayingApplicationPID = nil
+        }
+
+        if let sym = dlsym(handle, "MRMediaRemoteGetNowPlayingApplicationIsPlaying") {
+            getNowPlayingApplicationIsPlaying = unsafeBitCast(sym, to: MRGetNowPlayingApplicationIsPlaying.self)
+        } else {
+            getNowPlayingApplicationIsPlaying = nil
+        }
+        // Note: handle is intentionally not closed — the framework must remain loaded.
+    }
+
+    func snapshot() -> HelperPlaybackSnapshot? {
+        guard let getPID = getNowPlayingApplicationPID else {
+            DiagnosticsLogger.record("Helper playback probe: MediaRemote not loaded")
+            return nil
+        }
+
+        let group = DispatchGroup()
+        var pid: Int32 = 0
+        var isPlaying: Bool = false
+
+        group.enter()
+        getPID(callbackQueue) { value in
+            pid = value
+            group.leave()
+        }
+
+        if let getIsPlaying = getNowPlayingApplicationIsPlaying {
+            group.enter()
+            getIsPlaying(callbackQueue) { value in
+                isPlaying = value
+                group.leave()
+            }
+        }
+
+        let waited = group.wait(timeout: .now() + 2)
+        DiagnosticsLogger.record("Helper playback probe: waited=\(waited == .success ? "ok" : "timeout") pid=\(pid) isPlaying=\(isPlaying)")
+
+        guard waited == .success, isPlaying, pid > 0 else { return nil }
+
+        guard let application = NSRunningApplication(processIdentifier: pid_t(pid)) else {
+            DiagnosticsLogger.record("Helper playback probe: no running app for pid=\(pid)")
+            return nil
+        }
+
+        let identifier = application.bundleIdentifier
+            ?? application.bundleURL?.path(percentEncoded: false)
+            ?? application.executableURL?.path(percentEncoded: false)
+            ?? String(pid)
+
+        return HelperPlaybackSnapshot(
+            identifier: identifier,
+            name: application.localizedName,
+            pid: pid_t(pid),
+            isPlaying: true
+        )
     }
 }

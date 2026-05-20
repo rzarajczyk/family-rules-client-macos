@@ -14,11 +14,13 @@ final class SyncController: ObservableObject {
     @Published private(set) var blockedAppNames: [String: String] = [:]
     @Published private(set) var pendingCommandCount = 0
     @Published private(set) var lastCommandDescription = "None"
+    @Published private(set) var mediaPlayingApps: Set<String> = []
 
     private let activityMonitor: any ActivityMonitorProtocol
     private let syncClient: any ServerSyncClientProtocol
     private let lifecycleController: (any LifecycleControlling)?
     private let playbackBlocker: any PlaybackBlockingProtocol
+    private let playbackProbe: any MediaRemotePlaybackProbeProtocol
     private let commandStore: any ServerCommandStoreProtocol
     private let diagnosticsLogStore: any DiagnosticsLogStoreProtocol
     private let appVersionProvider: () -> String
@@ -31,6 +33,7 @@ final class SyncController: ObservableObject {
     private var registration: RegistrationRecord?
     private var clientInfoTask: Task<Void, Never>?
     private var reportTask: Task<Void, Never>?
+    private var mediaPlayingTask: Task<Void, Never>?
     private var isSendingClientInfo = false
     private var isSendingReport = false
     private var isFetchingBlockedApps = false
@@ -42,6 +45,7 @@ final class SyncController: ObservableObject {
         syncClient: any ServerSyncClientProtocol = ServerSyncClient(),
         lifecycleController: (any LifecycleControlling)? = nil,
         playbackBlocker: any PlaybackBlockingProtocol = PlaybackBlocker(),
+        playbackProbe: any MediaRemotePlaybackProbeProtocol = MediaRemotePlaybackProbe(),
         commandStore: any ServerCommandStoreProtocol = SQLiteServerCommandStore(),
         diagnosticsLogStore: any DiagnosticsLogStoreProtocol = DiagnosticsLogStore(),
         appVersionProvider: @escaping () -> String = SyncController.defaultAppVersion,
@@ -57,6 +61,7 @@ final class SyncController: ObservableObject {
         self.syncClient = syncClient
         self.lifecycleController = lifecycleController
         self.playbackBlocker = playbackBlocker
+        self.playbackProbe = playbackProbe
         self.commandStore = commandStore
         self.diagnosticsLogStore = diagnosticsLogStore
         self.appVersionProvider = appVersionProvider
@@ -81,7 +86,6 @@ final class SyncController: ObservableObject {
         // Load persisted diagnostics state now that we are starting (not in init).
         refreshDiagnosticsState()
         recordLog("Starting sync for \(registration.instanceName)")
-
         // The closure is `@MainActor` because `ActivityMonitorProtocol` is `@MainActor`-isolated,
         // so `self` is always accessed on the main actor — no extra hop needed.
         activityMonitor.onKnownAppsChanged = { [weak self] in
@@ -105,13 +109,20 @@ final class SyncController: ObservableObject {
             guard let self else { return }
             await self.runReportLoop()
         }
+
+        mediaPlayingTask = Task { [weak self] in
+            guard let self else { return }
+            await self.runMediaPlayingLoop()
+        }
     }
 
     func stop() {
         clientInfoTask?.cancel()
         reportTask?.cancel()
+        mediaPlayingTask?.cancel()
         clientInfoTask = nil
         reportTask = nil
+        mediaPlayingTask = nil
         registration = nil
         activityMonitor.onKnownAppsChanged = nil
         lifecycleController?.onRestrictedAppBlockingActivated = nil
@@ -264,11 +275,14 @@ final class SyncController: ObservableObject {
         defer { isSendingReport = false }
 
         do {
+            let mediaPlayingApps = await currentMediaPlayingApps()
+            self.mediaPlayingApps = mediaPlayingApps
             let response = try await syncClient.sendReport(
                 ReportPayload(
                     screenTime: snapshot.screenTimeSeconds,
                     applications: snapshot.applications,
-                    activeApps: snapshot.activeApps
+                    activeApps: snapshot.activeApps,
+                    mediaPlayingApps: mediaPlayingApps
                 ),
                 registration: registration
             )
@@ -289,6 +303,24 @@ final class SyncController: ObservableObject {
             DiagnosticsLogger.record(error: error, context: "Usage report failed")
             recordLog("Report failed (\(reason)): \(error.localizedDescription)")
         }
+    }
+
+    private func runMediaPlayingLoop() async {
+        while !Task.isCancelled {
+            let apps = await currentMediaPlayingApps()
+            recordLog("mediaPlayingLoop: detected=\(apps)")
+            mediaPlayingApps = apps
+            try? await Task.sleep(for: .seconds(5))
+        }
+    }
+
+    private func currentMediaPlayingApps() async -> Set<String> {
+        // NOTE: Returns a Set with at most 1 element — MediaRemote only reports a single
+        // now-playing app at a time.
+        guard let snapshot = playbackProbe.snapshot(), snapshot.isPlaying else {
+            return []
+        }
+        return [snapshot.identifier]
     }
 
     func recordUninstallLog(_ message: String) {

@@ -163,6 +163,19 @@ struct ReportPayload: Encodable, Equatable {
     let screenTime: Int
     let applications: [String: Int]
     let activeApps: Set<String>
+    let mediaPlayingApps: Set<String>
+
+    init(
+        screenTime: Int,
+        applications: [String: Int],
+        activeApps: Set<String>,
+        mediaPlayingApps: Set<String> = [],
+    ) {
+        self.screenTime = screenTime
+        self.applications = applications
+        self.activeApps = activeApps
+        self.mediaPlayingApps = mediaPlayingApps
+    }
 }
 
 private struct ClientInfoResponsePayload: Decodable {

@@ -170,91 +170,65 @@ struct PlaybackAppSnapshot: Equatable, Sendable {
     let isPlaying: Bool
 }
 
+/// Uses `nowplaying-cli` (https://github.com/kirtan-shah/nowplaying-cli) to detect
+/// the currently playing app. The binary must be installed on the system;
+/// `NowPlayingCliTool` handles installation / status checking.
+///
+/// `nowplaying-cli get bundleIdentifier playbackRate` prints two lines:
+///   line 1 – bundle ID of the now-playing app, or "null"
+///   line 2 – playback rate (1 = playing, 0 = paused / stopped)
 final class MediaRemotePlaybackProbe: MediaRemotePlaybackProbeProtocol, @unchecked Sendable {
-    private let handle: UnsafeMutableRawPointer?
-    private let callbackQueue = DispatchQueue(label: "com.familyrules.playback-blocker.mediaremote")
-    private let getNowPlayingApplicationPID: MRGetNowPlayingApplicationPID?
-    private let getNowPlayingApplicationIsPlaying: MRGetNowPlayingApplicationIsPlaying?
 
-    init() {
-        let frameworkPath = "/System/Library/PrivateFrameworks/MediaRemote.framework/MediaRemote"
+    init() {}
 
-        guard let handle = dlopen(frameworkPath, RTLD_NOW) else {
-            let message = dlerror().map { String(cString: $0) } ?? "Unknown dlopen error"
-            DiagnosticsLogger.record("Playback blocking failed to open MediaRemote: \(message)")
-            self.handle = nil
-            self.getNowPlayingApplicationPID = nil
-            self.getNowPlayingApplicationIsPlaying = nil
-            return
-        }
+    func snapshot(timeout: TimeInterval = 5) -> PlaybackAppSnapshot? {
+        guard let binaryURL = NowPlayingCliTool.binaryURL else { return nil }
 
-        self.handle = handle
+        let process = Process()
+        let pipe = Pipe()
+        process.executableURL = binaryURL
+        process.arguments = ["get", "clientBundleIdentifier", "playbackRate"]
+        process.standardOutput = pipe
+        process.standardError = FileHandle.nullDevice
 
-        if let pidSymbol = dlsym(handle, "MRMediaRemoteGetNowPlayingApplicationPID") {
-            getNowPlayingApplicationPID = unsafeBitCast(pidSymbol, to: MRGetNowPlayingApplicationPID.self)
-        } else {
-            getNowPlayingApplicationPID = nil
-            let message = dlerror().map { String(cString: $0) } ?? "Unknown dlsym error"
-            DiagnosticsLogger.record("Playback blocking missing MRMediaRemoteGetNowPlayingApplicationPID: \(message)")
-        }
-
-        if let playingSymbol = dlsym(handle, "MRMediaRemoteGetNowPlayingApplicationIsPlaying") {
-            getNowPlayingApplicationIsPlaying = unsafeBitCast(playingSymbol, to: MRGetNowPlayingApplicationIsPlaying.self)
-        } else {
-            getNowPlayingApplicationIsPlaying = nil
-            DiagnosticsLogger.record("Playback blocking missing MRMediaRemoteGetNowPlayingApplicationIsPlaying")
-        }
-    }
-
-    deinit {
-        if let handle {
-            dlclose(handle)
-        }
-    }
-
-    func snapshot(timeout: TimeInterval = 2) -> PlaybackAppSnapshot? {
-        guard let getNowPlayingApplicationPID else { return nil }
-
-        let group = DispatchGroup()
-        var pid: pid_t?
-        var isPlaying: Bool?
-
-        group.enter()
-        getNowPlayingApplicationPID(callbackQueue) { value in
-            pid = value > 0 ? value : nil
-            group.leave()
-        }
-
-        if let getNowPlayingApplicationIsPlaying {
-            group.enter()
-            getNowPlayingApplicationIsPlaying(callbackQueue) { value in
-                isPlaying = value
-                group.leave()
-            }
-        }
-
-        guard group.wait(timeout: .now() + timeout) == .success else {
-            DiagnosticsLogger.record("Playback blocking timed out waiting for MediaRemote state")
+        do {
+            try process.run()
+        } catch {
+            DiagnosticsLogger.record(error: error, context: "MediaRemotePlaybackProbe: failed to launch nowplaying-cli")
             return nil
         }
 
-        guard isPlaying != false else { return nil }
-        guard let pid else { return nil }
-        guard let application = NSRunningApplication(processIdentifier: pid) else { return nil }
+        let deadline = Date(timeIntervalSinceNow: timeout)
+        while process.isRunning {
+            if Date() >= deadline {
+                process.terminate()
+                DiagnosticsLogger.record("MediaRemotePlaybackProbe: nowplaying-cli timed out")
+                return nil
+            }
+            Thread.sleep(forTimeInterval: 0.05)
+        }
 
-        let identifier = application.bundleIdentifier
-            ?? application.bundleURL?.path(percentEncoded: false)
-            ?? application.executableURL?.path(percentEncoded: false)
-            ?? String(pid)
+        let data = pipe.fileHandleForReading.readDataToEndOfFile()
+        let lines = (String(data: data, encoding: .utf8) ?? "")
+            .components(separatedBy: .newlines)
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+
+        guard lines.count >= 2 else { return nil }
+        let bundleId = lines[0]
+        let rate = Double(lines[1]) ?? 0
+
+        guard bundleId != "null", !bundleId.isEmpty, rate > 0 else { return nil }
+
+        let application = NSWorkspace.shared.runningApplications
+            .first { $0.bundleIdentifier == bundleId }
 
         return PlaybackAppSnapshot(
-            identifier: identifier,
-            name: application.localizedName,
-            pid: pid,
-            isPlaying: isPlaying ?? true
+            identifier: bundleId,
+            name: application?.localizedName,
+            pid: application?.processIdentifier,
+            isPlaying: true
         )
     }
 }
 
-private typealias MRGetNowPlayingApplicationPID = @convention(c) (DispatchQueue, @escaping @convention(block) (Int32) -> Void) -> Void
-private typealias MRGetNowPlayingApplicationIsPlaying = @convention(c) (DispatchQueue, @escaping @convention(block) (Bool) -> Void) -> Void
+

@@ -21,21 +21,21 @@ final class ServerSyncClientTests: XCTestCase {
         let client = ServerSyncClient(session: makeSession())
 
         ServerSyncMockURLProtocol.handler = { request in
-            XCTAssertEqual(request.url?.absoluteString, "https://example.com/api/v2/client-info")
-            XCTAssertEqual(request.httpMethod, "POST")
-            XCTAssertEqual(request.value(forHTTPHeaderField: "Content-Type"), "application/json")
-            XCTAssertEqual(request.value(forHTTPHeaderField: "Authorization"), "Basic aW5zdGFuY2UtMTp0b2tlbi0x")
+            try requireEqual(request.url?.absoluteString, "https://example.com/api/v2/client-info")
+            try requireEqual(request.httpMethod, "POST")
+            try requireEqual(request.value(forHTTPHeaderField: "Content-Type"), "application/json")
+            try requireEqual(request.value(forHTTPHeaderField: "Authorization"), "Basic aW5zdGFuY2UtMTp0b2tlbi0x")
 
             let body = try readBody(from: request)
             let payload = try decodeJSON(body)
-            XCTAssertEqual(payload["version"] as? String, "1.0.0")
-            XCTAssertEqual(payload["reportIntervalSeconds"] as? Int, 30)
+            try requireEqual(payload["version"] as? String, "1.0.0")
+            try requireEqual(payload["reportIntervalSeconds"] as? Int, 30)
 
-            let knownApps = try XCTUnwrap(payload["knownApps"] as? [String: Any])
-            let finder = try XCTUnwrap(knownApps["com.apple.finder"] as? [String: Any])
-            XCTAssertEqual(finder["appName"] as? String, "Finder")
+            let knownApps = try requireValue(payload["knownApps"] as? [String: Any], "Missing knownApps payload")
+            let finder = try requireValue(knownApps["com.apple.finder"] as? [String: Any], "Missing Finder payload")
+            try requireEqual(finder["appName"] as? String, "Finder")
 
-            let response = HTTPURLResponse(url: try XCTUnwrap(request.url), statusCode: 200, httpVersion: nil, headerFields: nil)!
+            let response = HTTPURLResponse(url: try requireValue(request.url, "Missing request URL"), statusCode: 200, httpVersion: nil, headerFields: nil)!
             return (response, Data(#"{"status":"ok"}"#.utf8))
         }
 
@@ -60,20 +60,21 @@ final class ServerSyncClientTests: XCTestCase {
         let client = ServerSyncClient(session: makeSession())
 
         ServerSyncMockURLProtocol.handler = { request in
-            XCTAssertEqual(request.url?.absoluteString, "https://example.com/api/v2/report")
-            XCTAssertEqual(request.value(forHTTPHeaderField: "Authorization"), "Basic aW5zdGFuY2UtMTp0b2tlbi0x")
+            try requireEqual(request.url?.absoluteString, "https://example.com/api/v2/report")
+            try requireEqual(request.value(forHTTPHeaderField: "Authorization"), "Basic aW5zdGFuY2UtMTp0b2tlbi0x")
 
             let body = try readBody(from: request)
             let payload = try decodeJSON(body)
-            XCTAssertEqual(payload["screenTime"] as? Int, 45)
+            try requireEqual(payload["screenTime"] as? Int, 45)
 
-            let applications = try XCTUnwrap(payload["applications"] as? [String: Any])
-            XCTAssertEqual(applications["com.apple.finder"] as? Int, 45)
+            let applications = try requireValue(payload["applications"] as? [String: Any], "Missing applications payload")
+            try requireEqual(applications["com.apple.finder"] as? Int, 45)
 
-            let activeApps = try XCTUnwrap(payload["activeApps"] as? [String])
-            XCTAssertEqual(activeApps, ["com.apple.finder"])
+            let activeApps = try requireValue(payload["activeApps"] as? [String], "Missing activeApps payload")
+            try requireEqual(activeApps, ["com.apple.finder"])
+            try requireEqual(payload["mediaPlayingApps"] as? [String], [])
 
-            let response = HTTPURLResponse(url: try XCTUnwrap(request.url), statusCode: 200, httpVersion: nil, headerFields: nil)!
+            let response = HTTPURLResponse(url: try requireValue(request.url, "Missing request URL"), statusCode: 200, httpVersion: nil, headerFields: nil)!
             let data = Data(#"{"deviceState":"ACTIVE","extra":null,"serverCommands":[]}"#.utf8)
             return (response, data)
         }
@@ -95,16 +96,16 @@ final class ServerSyncClientTests: XCTestCase {
         let client = ServerSyncClient(session: makeSession())
 
         ServerSyncMockURLProtocol.handler = { request in
-            XCTAssertEqual(request.url?.absoluteString, "https://example.com/api/v2/command-acks")
-            XCTAssertEqual(request.value(forHTTPHeaderField: "Authorization"), "Basic aW5zdGFuY2UtMTp0b2tlbi0x")
+            try requireEqual(request.url?.absoluteString, "https://example.com/api/v2/command-acks")
+            try requireEqual(request.value(forHTTPHeaderField: "Authorization"), "Basic aW5zdGFuY2UtMTp0b2tlbi0x")
 
             let body = try readBody(from: request)
             let payload = try JSONDecoder().decode(CommandAcksUploadPayload.self, from: Data(body.utf8))
-            XCTAssertEqual(payload.commandAcks.count, 1)
-            XCTAssertEqual(payload.commandAcks.first?.commandId, "cmd-1")
-            XCTAssertEqual(payload.commandAcks.first?.commandName, "SEND_LOGS")
+            try requireEqual(payload.commandAcks.count, 1)
+            try requireEqual(payload.commandAcks.first?.commandId, "cmd-1")
+            try requireEqual(payload.commandAcks.first?.commandName, "SEND_LOGS")
 
-            let response = HTTPURLResponse(url: try XCTUnwrap(request.url), statusCode: 200, httpVersion: nil, headerFields: nil)!
+            let response = HTTPURLResponse(url: try requireValue(request.url, "Missing request URL"), statusCode: 200, httpVersion: nil, headerFields: nil)!
             return (response, Data(#"{"status":"ok"}"#.utf8))
         }
 
@@ -127,17 +128,17 @@ final class ServerSyncClientTests: XCTestCase {
         let client = ServerSyncClient(session: makeSession())
 
         ServerSyncMockURLProtocol.handler = { request in
-            XCTAssertEqual(request.url?.absoluteString, "https://example.com/api/v2/command-results")
-            XCTAssertEqual(request.value(forHTTPHeaderField: "Authorization"), "Basic aW5zdGFuY2UtMTp0b2tlbi0x")
+            try requireEqual(request.url?.absoluteString, "https://example.com/api/v2/command-results")
+            try requireEqual(request.value(forHTTPHeaderField: "Authorization"), "Basic aW5zdGFuY2UtMTp0b2tlbi0x")
 
             let body = try readBody(from: request)
             let payload = try JSONDecoder().decode(CommandResultsUploadPayload.self, from: Data(body.utf8))
-            XCTAssertEqual(payload.commandResults.count, 1)
-            XCTAssertEqual(payload.commandResults.first?.commandId, "cmd-1")
-            XCTAssertEqual(payload.commandResults.first?.status, "COMPLETED")
-            XCTAssertEqual(payload.commandResults.first?.details["lineCount"], "2")
+            try requireEqual(payload.commandResults.count, 1)
+            try requireEqual(payload.commandResults.first?.commandId, "cmd-1")
+            try requireEqual(payload.commandResults.first?.status, "COMPLETED")
+            try requireEqual(payload.commandResults.first?.details["lineCount"], "2")
 
-            let response = HTTPURLResponse(url: try XCTUnwrap(request.url), statusCode: 200, httpVersion: nil, headerFields: nil)!
+            let response = HTTPURLResponse(url: try requireValue(request.url, "Missing request URL"), statusCode: 200, httpVersion: nil, headerFields: nil)!
             return (response, Data(#"{"status":"ok"}"#.utf8))
         }
 
@@ -163,11 +164,11 @@ final class ServerSyncClientTests: XCTestCase {
         let client = ServerSyncClient(session: makeSession())
 
         ServerSyncMockURLProtocol.handler = { request in
-            XCTAssertEqual(request.url?.absoluteString, "https://example.com/api/v2/get-blocked-playback-apps")
-            XCTAssertEqual(request.httpMethod, "POST")
-            XCTAssertEqual(request.value(forHTTPHeaderField: "Authorization"), "Basic aW5zdGFuY2UtMTp0b2tlbi0x")
+            try requireEqual(request.url?.absoluteString, "https://example.com/api/v2/get-blocked-playback-apps")
+            try requireEqual(request.httpMethod, "POST")
+            try requireEqual(request.value(forHTTPHeaderField: "Authorization"), "Basic aW5zdGFuY2UtMTp0b2tlbi0x")
 
-            let response = HTTPURLResponse(url: try XCTUnwrap(request.url), statusCode: 200, httpVersion: nil, headerFields: nil)!
+            let response = HTTPURLResponse(url: try requireValue(request.url, "Missing request URL"), statusCode: 200, httpVersion: nil, headerFields: nil)!
             let data = Data(#"{"apps":[{"appPath":"com.microsoft.edgemac","appName":"Microsoft Edge"}]}"#.utf8)
             return (response, data)
         }
@@ -230,8 +231,7 @@ private func readBody(from request: URLRequest) throws -> String {
     }
 
     guard let stream = request.httpBodyStream else {
-        XCTFail("Missing request body")
-        return ""
+        throw TestFailure("Missing request body")
     }
 
     stream.open()
@@ -260,5 +260,30 @@ private func readBody(from request: URLRequest) throws -> String {
 
 private func decodeJSON(_ string: String) throws -> [String: Any] {
     let data = Data(string.utf8)
-    return try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+    return try requireValue(JSONSerialization.jsonObject(with: data) as? [String: Any], "Invalid JSON object")
+}
+
+private struct TestFailure: LocalizedError {
+    let message: String
+
+    init(_ message: String) {
+        self.message = message
+    }
+
+    var errorDescription: String? {
+        message
+    }
+}
+
+private func requireEqual<T: Equatable>(_ actual: T, _ expected: T, _ message: String? = nil) throws {
+    guard actual == expected else {
+        throw TestFailure(message ?? "Expected \(expected), got \(actual)")
+    }
+}
+
+private func requireValue<T>(_ value: T?, _ message: String) throws -> T {
+    guard let value else {
+        throw TestFailure(message)
+    }
+    return value
 }

@@ -37,6 +37,7 @@ struct DashboardView: View {
     @State private var refreshTick = 0
     @State private var selectedTab: Tab = .myDevice
     @State private var accessibilityGranted: Bool = AccessibilityPermission.isGranted
+    @State private var nowPlayingCliInstalled: Bool = NowPlayingCliTool.isInstalled
     @State private var isMoreMenuUnlocked = false
 
     private let appIconImage = AppIconImage.load()
@@ -69,6 +70,10 @@ struct DashboardView: View {
                 permissionsBanner
             }
 
+            if !nowPlayingCliInstalled {
+                nowPlayingCliBanner
+            }
+
             Picker(String.localized("Dashboard Section"), selection: $selectedTab) {
                 ForEach(Tab.allCases) { tab in
                     Text(tab.title).tag(tab)
@@ -83,7 +88,8 @@ struct DashboardView: View {
                         appUsagePanel(
                             focusedUsage: snapshot.applications,
                             visibleUsage: snapshot.visibleApplications,
-                            knownApps: snapshot.knownApps
+                            knownApps: snapshot.knownApps,
+                            mediaPlayingApps: syncController.mediaPlayingApps
                         )
                     }
                 case .allDevices:
@@ -105,7 +111,40 @@ struct DashboardView: View {
             if !accessibilityGranted {
                 accessibilityGranted = AccessibilityPermission.isGranted
             }
+            if !nowPlayingCliInstalled {
+                nowPlayingCliInstalled = NowPlayingCliTool.isInstalled
+            }
         }
+    }
+
+    private var nowPlayingCliBanner: some View {
+        HStack(spacing: 14) {
+            Image(systemName: "music.note")
+                .font(.system(size: 20))
+                .foregroundStyle(.secondary)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Now Playing detection unavailable")
+                    .font(.subheadline.weight(.semibold))
+                Text("Install nowplaying-cli to track media-playing apps.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Spacer()
+
+            Button("Install…") {
+                onFixPermissions()
+            }
+            .buttonStyle(.bordered)
+        }
+        .padding(14)
+        .background(Color.secondary.opacity(0.08))
+        .overlay(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .strokeBorder(Color.secondary.opacity(0.25), lineWidth: 1)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
 
     private var permissionsBanner: some View {
@@ -242,7 +281,8 @@ struct DashboardView: View {
     private func appUsagePanel(
         focusedUsage: [String: Int],
         visibleUsage: [String: Int],
-        knownApps: [String: KnownAppInfo]
+        knownApps: [String: KnownAppInfo],
+        mediaPlayingApps: Set<String> = []
     ) -> some View {
         let combinedUsage = combinedUsageEntries(focusedUsage: focusedUsage, visibleUsage: visibleUsage)
 
@@ -273,7 +313,8 @@ struct DashboardView: View {
                             info: knownApps[entry.identifier],
                             identifier: entry.identifier,
                             focusedSeconds: entry.focusedSeconds,
-                            visibleSeconds: entry.visibleSeconds
+                            visibleSeconds: entry.visibleSeconds,
+                            isPlayingMedia: mediaPlayingApps.contains(entry.identifier)
                         )
                     }
                 }
@@ -292,10 +333,18 @@ struct DashboardView: View {
         info: KnownAppInfo?,
         identifier: String,
         focusedSeconds: Int,
-        visibleSeconds: Int
+        visibleSeconds: Int,
+        isPlayingMedia: Bool = false
     ) -> some View {
         HStack(spacing: 14) {
-            appIcon(for: identifier)
+            ZStack(alignment: .bottomTrailing) {
+                appIcon(for: identifier)
+
+                if isPlayingMedia {
+                    PulsingMusicNote()
+                        .offset(x: 4, y: 4)
+                }
+            }
 
             VStack(alignment: .leading, spacing: 6) {
                 VStack(alignment: .leading, spacing: 2) {
@@ -542,5 +591,23 @@ struct DashboardView: View {
         }
 
         return "\(remainingSeconds)s"
+    }
+}
+
+private struct PulsingMusicNote: View {
+    @State private var visible = true
+
+    var body: some View {
+        Image(systemName: "music.note")
+            .font(.system(size: 11, weight: .bold))
+            .foregroundStyle(.secondary)
+            .padding(3)
+            .background(Circle().fill(Color(nsColor: .controlBackgroundColor)))
+            .opacity(visible ? 1.0 : 0.2)
+            .onAppear {
+                withAnimation(.easeInOut(duration: 0.8).repeatForever(autoreverses: true)) {
+                    visible = false
+                }
+            }
     }
 }

@@ -5,6 +5,7 @@ protocol FamilyRulesHelperXPCProtocol {
     func ping(_ reply: @escaping (String) -> Void)
     func updateAgentStatus(_ payload: Data, reply: @escaping (String) -> Void)
     func fetchLifecycleStatus(_ reply: @escaping (Data?, String?) -> Void)
+    func fetchPlaybackSnapshot(_ reply: @escaping (Data?, String?) -> Void)
     func executeDeviceAction(_ payload: Data, reply: @escaping (String?, String?) -> Void)
 }
 
@@ -35,6 +36,13 @@ struct HelperLifecycleStatusPayload: Codable, Equatable, Sendable {
     let lastPollDescription: String?
     let lastRelaunchDescription: String?
     let lastActionDescription: String?
+}
+
+struct HelperPlaybackSnapshotPayload: Codable, Equatable, Sendable {
+    let identifier: String
+    let name: String?
+    let pid: Int32?
+    let isPlaying: Bool
 }
 
 enum HelperDeviceAction: String, Codable, Equatable, Sendable {

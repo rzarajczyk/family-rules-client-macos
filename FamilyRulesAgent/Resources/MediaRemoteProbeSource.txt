@@ -1,0 +1,43 @@
+// Compiled at runtime into a standalone binary and executed as a subprocess.
+// Prints: bundleId=<id>   or nothing if no app is currently playing.
+import AppKit
+import Darwin
+import Dispatch
+import Foundation
+
+private typealias MRGetPID = @convention(c) (DispatchQueue, @escaping @convention(block) (Int32) -> Void) -> Void
+private typealias MRGetIsPlaying = @convention(c) (DispatchQueue, @escaping @convention(block) (Bool) -> Void) -> Void
+
+private func run() {
+    guard let handle = dlopen("/System/Library/PrivateFrameworks/MediaRemote.framework/MediaRemote", RTLD_NOW),
+          let pidSym = dlsym(handle, "MRMediaRemoteGetNowPlayingApplicationPID"),
+          let playingSym = dlsym(handle, "MRMediaRemoteGetNowPlayingApplicationIsPlaying") else {
+        exit(0)
+    }
+
+    let getPID = unsafeBitCast(pidSym, to: MRGetPID.self)
+    let getIsPlaying = unsafeBitCast(playingSym, to: MRGetIsPlaying.self)
+
+    // MediaRemote delivers callbacks via the main run loop (XPC/mach port internally).
+    // We must spin the run loop while waiting, not just block a background thread.
+    var pid: Int32 = 0
+    var playing = false
+    var pidDone = false
+    var playingDone = false
+
+    getPID(.main) { pid = $0; pidDone = true }
+    getIsPlaying(.main) { playing = $0; playingDone = true }
+
+    let deadline = Date().addingTimeInterval(3)
+    while !(pidDone && playingDone) && Date() < deadline {
+        RunLoop.main.run(until: Date().addingTimeInterval(0.05))
+    }
+
+    guard playing, pid > 0 else { exit(0) }
+
+    guard let app = NSRunningApplication(processIdentifier: pid_t(pid)) else { exit(0) }
+    let id = app.bundleIdentifier ?? app.executableURL?.path(percentEncoded: false) ?? String(pid)
+    print("bundleId=\(id)")
+}
+
+run()

@@ -24,6 +24,24 @@ struct UsageSnapshot: Equatable {
     let knownApps: [String: KnownAppInfo]
     /// True when screen is awake and session is active.
     let isEligibleForReporting: Bool
+
+    init(
+        screenTimeSeconds: Int,
+        applications: [String: Int],
+        activeApps: Set<String>,
+        visibleApplications: [String: Int],
+        visibleApps: Set<String>,
+        knownApps: [String: KnownAppInfo],
+        isEligibleForReporting: Bool,
+    ) {
+        self.screenTimeSeconds = screenTimeSeconds
+        self.applications = applications
+        self.activeApps = activeApps
+        self.visibleApplications = visibleApplications
+        self.visibleApps = visibleApps
+        self.knownApps = knownApps
+        self.isEligibleForReporting = isEligibleForReporting
+    }
 }
 
 struct PersistedUsageState: Equatable {

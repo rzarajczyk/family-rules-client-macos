@@ -239,6 +239,8 @@ struct PermissionsStepView: View {
     @State private var startAtLoginStatus = ServiceManagementBridge.registrationDescription()
     @State private var startAtLoginError: String?
     @State private var isRegisteringStartAtLogin = false
+    @State private var nowPlayingCliStatus = NowPlayingCliTool.status
+    @State private var isInstallingNowPlayingCli = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 24) {
@@ -251,6 +253,7 @@ struct PermissionsStepView: View {
 
             accessibilityPermissionRow
             startAtLoginPermissionRow
+            nowPlayingCliRow
 
             if let startAtLoginError {
                 Text(startAtLoginError)
@@ -362,6 +365,73 @@ struct PermissionsStepView: View {
         isAccessibilityGranted = AccessibilityPermission.isGranted
         isStartAtLoginEnabled = ServiceManagementBridge.isMainAppEnabled
         startAtLoginStatus = ServiceManagementBridge.registrationDescription()
+        if !isInstallingNowPlayingCli {
+            nowPlayingCliStatus = NowPlayingCliTool.status
+        }
+    }
+
+    private var nowPlayingCliRow: some View {
+        HStack(spacing: 16) {
+            Image(systemName: "music.note")
+                .font(.system(size: 28))
+                .foregroundStyle(nowPlayingCliStatus == .installed(path: NowPlayingCliTool.binaryURL?.path ?? "") ? .green : .secondary)
+                .frame(width: 40)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Now Playing detection")
+                    .font(.headline)
+                Text("Optional: shows which apps are currently playing media.")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                if case .installed(let path) = nowPlayingCliStatus {
+                    Text("Installed at \(path)")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            Spacer()
+
+            nowPlayingCliActionButton
+        }
+        .padding(16)
+        .background(Color(nsColor: .controlBackgroundColor))
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+    }
+
+    @ViewBuilder
+    private var nowPlayingCliActionButton: some View {
+        switch nowPlayingCliStatus {
+        case .installed:
+            Label("Installed", systemImage: "checkmark.circle.fill")
+                .foregroundStyle(.green)
+                .font(.subheadline.weight(.semibold))
+        case .installing:
+            Label("Installing…", systemImage: "arrow.down.circle")
+                .foregroundStyle(.secondary)
+                .font(.subheadline)
+        case .notInstalledBrewAvailable:
+            Button("Install via Homebrew") {
+                installNowPlayingCli()
+            }
+            .buttonStyle(.borderedProminent)
+            .disabled(isInstallingNowPlayingCli)
+        case .notInstalledNoBrewAvailable:
+            Button("Installation Instructions") {
+                NSWorkspace.shared.open(URL(string: "https://github.com/kirtan-shah/nowplaying-cli")!)
+            }
+            .buttonStyle(.bordered)
+        }
+    }
+
+    private func installNowPlayingCli() {
+        guard !isInstallingNowPlayingCli else { return }
+        isInstallingNowPlayingCli = true
+        nowPlayingCliStatus = .installing
+        NowPlayingCliTool.installViaBrew { success in
+            self.isInstallingNowPlayingCli = false
+            self.nowPlayingCliStatus = NowPlayingCliTool.status
+        }
     }
 
     private func enableStartAtLogin() {

@@ -12,6 +12,7 @@
 		A10000320000000000000008 /* TrayIconActive.png in Resources */ = {isa = PBXBuildFile; fileRef = A10001350000000000000008 /* TrayIconActive.png */; };
 		A10000330000000000000008 /* TrayIconBlocked.png in Resources */ = {isa = PBXBuildFile; fileRef = A10001360000000000000008 /* TrayIconBlocked.png */; };
 		A10000340000000000000009 /* Localizable.strings in Resources */ = {isa = PBXBuildFile; fileRef = A10001390000000000000009 /* Localizable.strings */; };
+		A1000035000000000000000C /* MediaRemoteProbeSource.txt in Resources */ = {isa = PBXBuildFile; fileRef = A100013E000000000000000C /* MediaRemoteProbeSource.txt */; };
 		A10000010000000000000001 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001010000000000000001 /* AppDelegate.swift */; };
 		A100000B0000000000000008 /* SessionActionExecutor.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001340000000000000008 /* SessionActionExecutor.swift */; };
 		A100000A0000000000000008 /* AppIconImage.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001330000000000000008 /* AppIconImage.swift */; };
@@ -47,6 +48,7 @@
 		A100002B000000000000000A /* LocalAccountIdentity.swift in Sources */ = {isa = PBXBuildFile; fileRef = A100013B000000000000000A /* LocalAccountIdentity.swift */; };
 		A100002C000000000000000A /* LocalAccountIdentityTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A100013C000000000000000A /* LocalAccountIdentityTests.swift */; };
 		A100002D000000000000000B /* PlaybackBlocker.swift in Sources */ = {isa = PBXBuildFile; fileRef = A100013D000000000000000B /* PlaybackBlocker.swift */; };
+		A100002E000000000000000C /* NowPlayingCliTool.swift in Sources */ = {isa = PBXBuildFile; fileRef = A100013F000000000000000C /* NowPlayingCliTool.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -107,6 +109,8 @@
 		A100013B000000000000000A /* LocalAccountIdentity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalAccountIdentity.swift; sourceTree = "<group>"; };
 		A100013C000000000000000A /* LocalAccountIdentityTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalAccountIdentityTests.swift; sourceTree = "<group>"; };
 		A100013D000000000000000B /* PlaybackBlocker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaybackBlocker.swift; sourceTree = "<group>"; };
+		A100013F000000000000000C /* NowPlayingCliTool.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NowPlayingCliTool.swift; sourceTree = "<group>"; };
+		A100013E000000000000000C /* MediaRemoteProbeSource.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = MediaRemoteProbeSource.txt; sourceTree = "<group>"; };
 		A10001380000000000000009 /* en */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = en; path = en.lproj/Localizable.strings; sourceTree = "<group>"; };
 		A10001390000000000000009 /* Localizable.strings */ = {isa = PBXVariantGroup; children = (A10001380000000000000009 /* en */, A100013A0000000000000009 /* pl */, ); name = Localizable.strings; sourceTree = "<group>"; };
 		A100013A0000000000000009 /* pl */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = pl; path = pl.lproj/Localizable.strings; sourceTree = "<group>"; };
@@ -178,6 +182,7 @@
 				A100013B000000000000000A /* LocalAccountIdentity.swift */,
 				A10001370000000000000009 /* Localization.swift */,
 				A100013D000000000000000B /* PlaybackBlocker.swift */,
+				A100013F000000000000000C /* NowPlayingCliTool.swift */,
 				A10001100000000000000002 /* RegistrationClient.swift */,
 				A10001340000000000000008 /* SessionActionExecutor.swift */,
 				A10001110000000000000002 /* RegistrationStore.swift */,
@@ -194,6 +199,7 @@
 			children = (
 				A10001310000000000000008 /* AppIcon.icns */,
 				A10001320000000000000008 /* AppIconSource.png */,
+				A100013E000000000000000C /* MediaRemoteProbeSource.txt */,
 				A10001390000000000000009 /* Localizable.strings */,
 				A10001350000000000000008 /* TrayIconActive.png */,
 				A10001360000000000000008 /* TrayIconBlocked.png */,
@@ -368,6 +374,7 @@
 			files = (
 				A10000300000000000000008 /* AppIcon.icns in Resources */,
 				A10000310000000000000008 /* AppIconSource.png in Resources */,
+				A1000035000000000000000C /* MediaRemoteProbeSource.txt in Resources */,
 				A10000340000000000000009 /* Localizable.strings in Resources */,
 				A10000320000000000000008 /* TrayIconActive.png in Resources */,
 				A10000330000000000000008 /* TrayIconBlocked.png in Resources */,
@@ -434,6 +441,7 @@
 				A100002B000000000000000A /* LocalAccountIdentity.swift in Sources */,
 				A100002A0000000000000009 /* Localization.swift in Sources */,
 				A100002D000000000000000B /* PlaybackBlocker.swift in Sources */,
+				A100002E000000000000000C /* NowPlayingCliTool.swift in Sources */,
 				A10000060000000000000001 /* FamilyRulesHelperXPCProtocol.swift in Sources */,
 				A10000100000000000000002 /* RegistrationClient.swift in Sources */,
 				A100000B0000000000000008 /* SessionActionExecutor.swift in Sources */,
