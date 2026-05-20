@@ -480,6 +480,8 @@ private final class ActivityMonitorStub: ActivityMonitorProtocol {
         snapshotValue
     }
 
+    func registerKnownApp(identifier: String, name: String) {}
+
     func triggerKnownAppsChanged() {
         onKnownAppsChanged?()
     }

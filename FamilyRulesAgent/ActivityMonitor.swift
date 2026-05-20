@@ -63,6 +63,7 @@ protocol ActivityMonitorProtocol: AnyObject {
     func start()
     func stop()
     func snapshot() -> UsageSnapshot
+    func registerKnownApp(identifier: String, name: String)
 }
 
 // MARK: - UsageAccumulator
@@ -159,6 +160,11 @@ struct UsageAccumulator {
     mutating func setSessionActive(_ isSessionActive: Bool, at date: Date) {
         advance(to: date)
         self.isSessionActive = isSessionActive
+    }
+
+    /// Register an app as known without recording any usage time (e.g. media-playing app with no foreground time).
+    mutating func registerKnownApp(_ app: KnownAppInfo) {
+        knownApps[app.identifier] = app
     }
 
     /// Replace the full set of currently visible app identifiers (from reconciliation loop).
@@ -455,6 +461,17 @@ final class ActivityMonitor: ObservableObject, ActivityMonitorProtocol {
         let previousKnownIDs = Set(accumulator.knownApps.keys)
         accumulator.setFrontmostApp(app, at: now)
         frontmostApplicationName = accumulator.currentAppName
+        persistAccumulator(at: now)
+
+        if Set(accumulator.knownApps.keys) != previousKnownIDs {
+            onKnownAppsChanged?()
+        }
+    }
+
+    func registerKnownApp(identifier: String, name: String) {
+        let now = clock()
+        let previousKnownIDs = Set(accumulator.knownApps.keys)
+        accumulator.registerKnownApp(KnownAppInfo(identifier: identifier, name: name))
         persistAccumulator(at: now)
 
         if Set(accumulator.knownApps.keys) != previousKnownIDs {

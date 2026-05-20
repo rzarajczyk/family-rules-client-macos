@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import SQLite3
 
@@ -237,7 +238,7 @@ final class SyncController: ObservableObject {
             ],
             timezoneOffsetSeconds: timezoneProvider(),
             reportIntervalSeconds: reportIntervalSeconds,
-            knownApps: snapshot.knownApps.mapValues { KnownAppPayload(appName: $0.name, iconBase64Png: nil) },
+            knownApps: snapshot.knownApps.mapValues { KnownAppPayload(appName: $0.name, iconBase64Png: iconBase64Png(for: $0.identifier)) },
             supportedServerCommands: ["SEND_LOGS"]
         )
 
@@ -277,10 +278,15 @@ final class SyncController: ObservableObject {
         do {
             let mediaPlayingApps = await currentMediaPlayingApps()
             self.mediaPlayingApps = mediaPlayingApps
+            // Ensure media-playing apps appear in the applications dict even with 0 usage.
+            var applications = snapshot.applications
+            for bundleId in mediaPlayingApps where applications[bundleId] == nil {
+                applications[bundleId] = 0
+            }
             let response = try await syncClient.sendReport(
                 ReportPayload(
                     screenTime: snapshot.screenTimeSeconds,
-                    applications: snapshot.applications,
+                    applications: applications,
                     activeApps: snapshot.activeApps,
                     mediaPlayingApps: mediaPlayingApps
                 ),
@@ -320,6 +326,9 @@ final class SyncController: ObservableObject {
         guard let snapshot = playbackProbe.snapshot(), snapshot.isPlaying else {
             return []
         }
+        // Register the playing app as known so it appears in ClientInfo even with 0 usage time.
+        let appName = snapshot.name ?? snapshot.identifier
+        activityMonitor.registerKnownApp(identifier: snapshot.identifier, name: appName)
         return [snapshot.identifier]
     }
 
@@ -520,6 +529,29 @@ final class SyncController: ObservableObject {
     private func refreshDiagnosticsState() {
         recentLogLines = (try? diagnosticsLogStore.loadRecentLines(limit: 20)) ?? recentLogLines
         pendingCommandCount = (try? commandStore.pendingCommandCount()) ?? pendingCommandCount
+    }
+
+    /// Returns a base64-encoded PNG string for the given app bundle identifier, or nil if unavailable.
+    private func iconBase64Png(for bundleIdentifier: String) -> String? {
+        guard let appURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleIdentifier) else {
+            return nil
+        }
+        let image = NSWorkspace.shared.icon(forFile: appURL.path)
+        // Resize to 64x64 to keep payload small
+        let size = NSSize(width: 64, height: 64)
+        let resized = NSImage(size: size)
+        resized.lockFocus()
+        image.draw(in: NSRect(origin: .zero, size: size),
+                   from: NSRect(origin: .zero, size: image.size),
+                   operation: .copy,
+                   fraction: 1.0)
+        resized.unlockFocus()
+        guard let tiffData = resized.tiffRepresentation,
+              let bitmap = NSBitmapImageRep(data: tiffData),
+              let pngData = bitmap.representation(using: .png, properties: [:]) else {
+            return nil
+        }
+        return pngData.base64EncodedString()
     }
 
     private func recordLog(_ message: String) {

@@ -284,7 +284,7 @@ struct DashboardView: View {
         knownApps: [String: KnownAppInfo],
         mediaPlayingApps: Set<String> = []
     ) -> some View {
-        let combinedUsage = combinedUsageEntries(focusedUsage: focusedUsage, visibleUsage: visibleUsage)
+        let combinedUsage = combinedUsageEntries(focusedUsage: focusedUsage, visibleUsage: visibleUsage, mediaPlayingApps: mediaPlayingApps)
 
         return VStack(alignment: .leading, spacing: 14) {
             HStack {
@@ -545,9 +545,10 @@ struct DashboardView: View {
 
     private func combinedUsageEntries(
         focusedUsage: [String: Int],
-        visibleUsage: [String: Int]
+        visibleUsage: [String: Int],
+        mediaPlayingApps: Set<String> = []
     ) -> [(identifier: String, focusedSeconds: Int, visibleSeconds: Int)] {
-        let identifiers = Set(focusedUsage.keys).union(visibleUsage.keys)
+        let identifiers = Set(focusedUsage.keys).union(visibleUsage.keys).union(mediaPlayingApps)
 
         return identifiers
             .map {
