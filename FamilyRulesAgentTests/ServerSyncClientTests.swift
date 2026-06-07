@@ -50,7 +50,7 @@ final class ServerSyncClientTests: XCTestCase {
                 knownApps: [
                     "com.apple.finder": KnownAppPayload(appName: "Finder", iconBase64Png: nil),
                 ],
-                supportedServerCommands: []
+                capabilities: []
             ),
             registration: registration
         )

@@ -35,7 +35,7 @@ final class SyncControllerTests: XCTestCase {
         XCTAssertEqual(controller.lastDeviceState, "ACTIVE")
         let lastClientInfoPayloadValue = await client.lastClientInfoPayload()
         let lastClientInfoPayload = try XCTUnwrap(lastClientInfoPayloadValue)
-        XCTAssertEqual(lastClientInfoPayload.supportedServerCommands, ["SEND_LOGS"])
+        XCTAssertEqual(lastClientInfoPayload.capabilities, ["LOGS_COMMAND", "COMMANDS_PULL", "MEDIA_PLAYBACK_REPORT", "MEDIA_PLAYBACK_BLOCK"])
     }
 
     func testStartSkipsReportWhenInactive() async throws {

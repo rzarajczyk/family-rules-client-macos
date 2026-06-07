@@ -239,7 +239,7 @@ final class SyncController: ObservableObject {
             timezoneOffsetSeconds: timezoneProvider(),
             reportIntervalSeconds: reportIntervalSeconds,
             knownApps: snapshot.knownApps.mapValues { KnownAppPayload(appName: $0.name, iconBase64Png: iconBase64Png(for: $0.identifier)) },
-            supportedServerCommands: ["SEND_LOGS"]
+            capabilities: ["LOGS_COMMAND", "COMMANDS_PULL", "MEDIA_PLAYBACK_REPORT", "MEDIA_PLAYBACK_BLOCK"]
         )
 
         do {

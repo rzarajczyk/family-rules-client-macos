@@ -143,7 +143,7 @@ struct ClientInfoPayload: Encodable, Equatable {
     let timezoneOffsetSeconds: Int
     let reportIntervalSeconds: Int
     let knownApps: [String: KnownAppPayload]
-    let supportedServerCommands: [String]
+    let capabilities: [String]
 }
 
 struct AvailableStatePayload: Encodable, Equatable {
