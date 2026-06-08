@@ -27,3 +27,16 @@
 "Save your work before the screen locks." = "Save your work before the screen locks.";
 "Locking in %ds" = "Locking in %ds";
 "Test Lock Screen (30s)" = "Test Lock Screen (30s)";
+"Refresh state" = "Refresh state";
+"Device State" = "Device State";
+"Sending report to server…" = "Sending report to server…";
+"Current device state: %@" = "Current device state: %@";
+"Active (no restrictions)" = "Active (no restrictions)";
+"Apps blocked" = "Apps blocked";
+"Apps blocked (with countdown)" = "Apps blocked (with countdown)";
+"Details: %@" = "Details: %@";
+"Failed to refresh: %@" = "Failed to refresh: %@";
+"Could not reach the server. The device state shown may be out of date." = "Could not reach the server. The device state shown may be out of date.";
+"Server commands: %@" = "Server commands: %@";
+"No server commands received." = "No server commands received.";
+"Close" = "Close";

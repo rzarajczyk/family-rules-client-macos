@@ -57,7 +57,15 @@ struct DiagnosticsView: View {
                 LabeledContent("Helper Reachability", value: store.helperConnectionState)
                 LabeledContent("Last Helper Reply", value: store.helperLastReply)
                 LabeledContent("Service Management", value: store.serviceManagementState)
-                LabeledContent("Log File", value: store.logFileLocation)
+                LabeledContent("Log File") {
+                    Button(store.logFileLocation) {
+                        store.openLogFile()
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundColor(.accentColor)
+                    .underline()
+                    .textSelection(.enabled)
+                }
                 LabeledContent("Lifecycle", value: lifecycleController.statusDescription)
                 LabeledContent("Login Item", value: lifecycleController.loginItemStatusDescription)
                 LabeledContent("Helper Lifecycle", value: lifecycleController.helperStatusDescription)

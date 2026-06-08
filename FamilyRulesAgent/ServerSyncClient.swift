@@ -211,28 +211,25 @@ struct ServerCommandPayload: Decodable, Equatable {
 }
 
 struct CommandAcksUploadPayload: Codable, Equatable {
-    let commandAcks: [CommandAckUploadEntryPayload]
+    let acks: [CommandAckUploadEntryPayload]
 }
 
 struct CommandAckUploadEntryPayload: Codable, Equatable {
     let commandId: String
-    let commandName: String
-    let protocolVersion: Int
-    let acknowledgedAt: String
+    let receivedAt: String
 }
 
 struct CommandResultsUploadPayload: Codable, Equatable {
-    let commandResults: [CommandResultUploadEntryPayload]
+    let results: [CommandResultUploadEntryPayload]
 }
 
 struct CommandResultUploadEntryPayload: Codable, Equatable {
     let commandId: String
     let commandName: String
-    let protocolVersion: Int
     let completedAt: String
     let status: String
-    let message: String
-    let details: [String: String]
+    let responseType: String
+    let responsePayload: [String: String]
 }
 
 enum ServerSyncClientError: LocalizedError, Equatable {

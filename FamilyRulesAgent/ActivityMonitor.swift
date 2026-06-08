@@ -258,8 +258,10 @@ final class ActivityMonitor: ObservableObject, ActivityMonitorProtocol {
     @Published private(set) var isScreenAwake: Bool
     @Published private(set) var isSessionActive: Bool
     @Published private(set) var visibleAppCount: Int = 0
+    @Published private(set) var usageSnapshot: UsageSnapshot
 
     var onKnownAppsChanged: (() -> Void)?
+    var onUsageSnapshotUpdated: (() -> Void)?
 
     private let workspace: NSWorkspace
     private let clock: () -> Date
@@ -269,6 +271,8 @@ final class ActivityMonitor: ObservableObject, ActivityMonitorProtocol {
     private var observers: [NSObjectProtocol] = []
     private var accumulator: UsageAccumulator
     private var reconciliationTask: Task<Void, Never>?
+    private var lastPersistedAt: Date?
+    private let persistInterval: TimeInterval = 5
 
     init(
         workspace: NSWorkspace = .shared,
@@ -292,8 +296,8 @@ final class ActivityMonitor: ObservableObject, ActivityMonitorProtocol {
             DiagnosticsLogger.record(error: error, context: "Failed to load persisted usage state")
         }
 
-        let initialAccumulator = UsageAccumulator(now: now, currentApp: initialApp, persistedState: persistedState)
-
+        var initialAccumulator = UsageAccumulator(now: now, currentApp: initialApp, persistedState: persistedState)
+        usageSnapshot = initialAccumulator.snapshot(at: now)
         accumulator = initialAccumulator
         frontmostApplicationName = initialAccumulator.currentAppName
         isScreenAwake = initialAccumulator.screenAwake
@@ -383,7 +387,7 @@ final class ActivityMonitor: ObservableObject, ActivityMonitorProtocol {
     func stop() {
         guard !observers.isEmpty else { return }
 
-        persistAccumulator(at: clock())
+        persistAccumulator(at: clock(), force: true)
 
         let center = workspace.notificationCenter
         for observer in observers { center.removeObserver(observer) }
@@ -394,7 +398,8 @@ final class ActivityMonitor: ObservableObject, ActivityMonitorProtocol {
     }
 
     func snapshot() -> UsageSnapshot {
-        accumulator.snapshot(at: clock())
+        refreshPublishedSnapshot(at: clock())
+        return usageSnapshot
     }
 
     // MARK: - Reconciliation loop
@@ -443,9 +448,11 @@ final class ActivityMonitor: ObservableObject, ActivityMonitorProtocol {
         let previousKnownIDs = Set(accumulator.knownApps.keys)
         accumulator.setVisibleAppIDs(visibleIDs, knownAppLookup: lookup, at: now)
         visibleAppCount = visibleIDs.count
-        persistAccumulator(at: now)
+        let knownAppsChanged = Set(accumulator.knownApps.keys) != previousKnownIDs
+        persistAccumulator(at: now, force: knownAppsChanged)
+        refreshPublishedSnapshot(at: now)
 
-        if Set(accumulator.knownApps.keys) != previousKnownIDs {
+        if knownAppsChanged {
             onKnownAppsChanged?()
         }
     }
@@ -461,9 +468,11 @@ final class ActivityMonitor: ObservableObject, ActivityMonitorProtocol {
         let previousKnownIDs = Set(accumulator.knownApps.keys)
         accumulator.setFrontmostApp(app, at: now)
         frontmostApplicationName = accumulator.currentAppName
-        persistAccumulator(at: now)
+        let knownAppsChanged = Set(accumulator.knownApps.keys) != previousKnownIDs
+        persistAccumulator(at: now, force: knownAppsChanged)
+        refreshPublishedSnapshot(at: now)
 
-        if Set(accumulator.knownApps.keys) != previousKnownIDs {
+        if knownAppsChanged {
             onKnownAppsChanged?()
         }
     }
@@ -472,7 +481,8 @@ final class ActivityMonitor: ObservableObject, ActivityMonitorProtocol {
         let now = clock()
         let previousKnownIDs = Set(accumulator.knownApps.keys)
         accumulator.registerKnownApp(KnownAppInfo(identifier: identifier, name: name))
-        persistAccumulator(at: now)
+        persistAccumulator(at: now, force: true)
+        refreshPublishedSnapshot(at: now)
 
         if Set(accumulator.knownApps.keys) != previousKnownIDs {
             onKnownAppsChanged?()
@@ -483,17 +493,32 @@ final class ActivityMonitor: ObservableObject, ActivityMonitorProtocol {
         let now = clock()
         accumulator.setScreenAwake(isScreenAwake, at: now)
         self.isScreenAwake = isScreenAwake
-        persistAccumulator(at: now)
+        persistAccumulator(at: now, force: true)
+        refreshPublishedSnapshot(at: now)
     }
 
     private func setSessionActive(_ isSessionActive: Bool) {
         let now = clock()
         accumulator.setSessionActive(isSessionActive, at: now)
         self.isSessionActive = isSessionActive
-        persistAccumulator(at: now)
+        persistAccumulator(at: now, force: true)
+        refreshPublishedSnapshot(at: now)
     }
 
-    private func persistAccumulator(at date: Date) {
+    private func refreshPublishedSnapshot(at date: Date) {
+        usageSnapshot = accumulator.snapshot(at: date)
+        onUsageSnapshotUpdated?()
+    }
+
+    private func persistAccumulator(at date: Date, force: Bool = false) {
+        if !force,
+           let lastPersistedAt,
+           date.timeIntervalSince(lastPersistedAt) < persistInterval {
+            return
+        }
+
+        lastPersistedAt = date
+
         do {
             try usageStore.save(accumulator.persistedState(at: date))
         } catch {

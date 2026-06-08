@@ -24,8 +24,6 @@ struct DashboardView: View {
     @ObservedObject var lifecycleController: LifecycleController
     @ObservedObject var allDevicesModel: AllDevicesModel
     let onOpenDiagnostics: () -> Void
-    let onOpenSetup: () -> Void
-    let onPingHelper: () -> Void
     let onFixPermissions: () -> Void
     let onUnregister: () -> Void
     #if DEBUG
@@ -34,11 +32,11 @@ struct DashboardView: View {
     let onDebugQuit: (() -> Void)? = nil
     #endif
 
-    @State private var refreshTick = 0
     @State private var selectedTab: Tab = .myDevice
     @State private var accessibilityGranted: Bool = AccessibilityPermission.isGranted
     @State private var nowPlayingCliInstalled: Bool = NowPlayingCliTool.isInstalled
     @State private var isMoreMenuUnlocked = false
+    @State private var showRefreshStateDialog = false
 
     private let appIconImage = AppIconImage.load()
 
@@ -61,7 +59,7 @@ struct DashboardView: View {
     }
 
     var body: some View {
-        let snapshot = activityMonitor.snapshot()
+        let snapshot = activityMonitor.usageSnapshot
 
         VStack(alignment: .leading, spacing: 14) {
             screenTimePanel(snapshot: snapshot)
@@ -106,13 +104,17 @@ struct DashboardView: View {
         }
         .padding(24)
         .frame(minWidth: 760, minHeight: 620)
-        .onReceive(Timer.publish(every: 1, on: .main, in: .common).autoconnect()) { _ in
-            refreshTick += 1
+        .onAppear {
             if !accessibilityGranted {
                 accessibilityGranted = AccessibilityPermission.isGranted
             }
             if !nowPlayingCliInstalled {
                 nowPlayingCliInstalled = NowPlayingCliTool.isInstalled
+            }
+        }
+        .sheet(isPresented: $showRefreshStateDialog) {
+            RefreshStateDialog(syncController: syncController) {
+                showRefreshStateDialog = false
             }
         }
     }
@@ -212,8 +214,11 @@ struct DashboardView: View {
                 if isMoreMenuUnlocked {
                     Menu {
                         Button("Open Diagnostics", action: onOpenDiagnostics)
-                        Button("Open Setup", action: onOpenSetup)
-                        Button("Ping Helper", action: onPingHelper)
+                        if appModel.isRegistered {
+                            Button(String.localized("Refresh state")) {
+                                showRefreshStateDialog = true
+                            }
+                        }
                         Divider()
                         Button("Unregister This Mac", role: .destructive, action: onUnregister)
                         if let onDebugQuit {
@@ -571,12 +576,24 @@ struct DashboardView: View {
     }
 
     private func applicationImage(for identifier: String) -> NSImage? {
+        if let cached = Self.appIconCache.object(forKey: identifier as NSString) {
+            return cached
+        }
+
         if let appURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: identifier) {
-            return NSWorkspace.shared.icon(forFile: appURL.path)
+            let image = NSWorkspace.shared.icon(forFile: appURL.path)
+            Self.appIconCache.setObject(image, forKey: identifier as NSString)
+            return image
         }
 
         return nil
     }
+
+    private static let appIconCache: NSCache<NSString, NSImage> = {
+        let cache = NSCache<NSString, NSImage>()
+        cache.countLimit = 128
+        return cache
+    }()
 
     private func formatDuration(_ seconds: Int) -> String {
         let hours = seconds / 3600

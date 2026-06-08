@@ -27,3 +27,16 @@
 "Save your work before the screen locks." = "Zapisz swoją pracę, zanim ekran zostanie zablokowany.";
 "Locking in %ds" = "Blokada za %ds";
 "Test Lock Screen (30s)" = "Test blokady ekranu (30 s)";
+"Refresh state" = "Odśwież stan";
+"Device State" = "Stan urządzenia";
+"Sending report to server…" = "Wysyłanie raportu do serwera…";
+"Current device state: %@" = "Aktualny stan urządzenia: %@";
+"Active (no restrictions)" = "Aktywny (bez ograniczeń)";
+"Apps blocked" = "Aplikacje zablokowane";
+"Apps blocked (with countdown)" = "Aplikacje zablokowane (z odliczaniem)";
+"Details: %@" = "Szczegóły: %@";
+"Failed to refresh: %@" = "Nie udało się odświeżyć: %@";
+"Could not reach the server. The device state shown may be out of date." = "Nie udało się połączyć z serwerem. Wyświetlany stan urządzenia może być nieaktualny.";
+"Server commands: %@" = "Polecenia z serwera: %@";
+"No server commands received." = "Brak poleceń z serwera.";
+"Close" = "Zamknij";

@@ -7,6 +7,12 @@ enum LifecycleShutdownAction: Equatable {
     case uninstall
 }
 
+enum ManualRefreshOutcome: Equatable {
+    case success(deviceState: String, extra: String?, serverCommands: [ServerCommandPayload])
+    case unreachable
+    case error(String)
+}
+
 @MainActor
 final class SyncController: ObservableObject {
     @Published private(set) var syncStatus = "Idle"
@@ -45,7 +51,7 @@ final class SyncController: ObservableObject {
     private var isFetchingBlockedApps = false
     private var isFetchingBlockedPlaybackApps = false
     private var isProcessingCommands = false
-    private var pendingLifecycleAction: LifecycleShutdownAction?
+    private var isLifecycleShutdownInProgress = false
 
     var onLifecycleShutdown: ((LifecycleShutdownAction) -> Void)?
 
@@ -261,6 +267,38 @@ final class SyncController: ObservableObject {
             return
         }
 
+        await sendReport(reason: reason, snapshot: snapshot, registration: registration)
+    }
+
+    func manualRefresh() async -> ManualRefreshOutcome {
+        guard let registration else {
+            return .error("This Mac is not registered.")
+        }
+
+        guard !isSendingReport else {
+            return .error("A report is already in progress.")
+        }
+
+        let snapshot = activityMonitor.snapshot()
+        return await sendReport(
+            reason: "manual refresh",
+            snapshot: snapshot,
+            registration: registration,
+            force: true
+        ) ?? .error("A report is already in progress.")
+    }
+
+    @discardableResult
+    private func sendReport(
+        reason: String,
+        snapshot: UsageSnapshot,
+        registration: RegistrationRecord,
+        force: Bool = false
+    ) async -> ManualRefreshOutcome? {
+        guard !isSendingReport else {
+            return force ? .error("A report is already in progress.") : nil
+        }
+
         isSendingReport = true
         defer { isSendingReport = false }
 
@@ -287,16 +325,47 @@ final class SyncController: ObservableObject {
             lifecycleController?.updateServerDeviceState(response.deviceState, extra: response.extra)
             await refreshBlockedAppsIfNeeded(reason: reason, deviceState: response.deviceState)
             await refreshBlockedPlaybackAppsIfNeeded(reason: reason, deviceState: response.deviceState)
-            try storeIncomingCommands(response.serverCommands, reason: reason)
+            // Lifecycle commands (DISABLE/UNINSTALL) are handled separately from the
+            // deduplicated command queue. They are one-shot actions whose effect (process
+            // shutdown) is not persisted, so routing them through the INSERT-OR-IGNORE queue
+            // would cause them to be silently skipped after a restart — leaving the agent
+            // running while the server keeps redelivering the command. Driving them directly
+            // from each report response makes shutdown robust across restarts.
+            let lifecycleCommands = response.serverCommands.filter { lifecycleAction(for: $0.commandName) != nil }
+            let queueCommands = response.serverCommands.filter { lifecycleAction(for: $0.commandName) == nil }
+            try storeIncomingCommands(queueCommands, reason: reason)
             lastErrorMessage = nil
-            syncStatus = "Healthy"
-            recordLog("Sent report (\(reason)) with \(snapshot.applications.count) apps and state \(response.deviceState)")
+            syncStatus = snapshot.isEligibleForReporting ? "Healthy" : "Paused"
+            let commandsDescription = response.serverCommands.isEmpty
+                ? "no commands"
+                : response.serverCommands.map(\.commandName).joined(separator: ", ")
+            recordLog("Sent report (\(reason)) with \(snapshot.applications.count) apps and state \(response.deviceState), commands: \(commandsDescription)")
             await processPendingCommands(reason: "report \(reason)")
+            await handleLifecycleCommands(lifecycleCommands, reason: "report \(reason)", registration: registration)
+
+            return .success(
+                deviceState: response.deviceState,
+                extra: response.extra,
+                serverCommands: response.serverCommands
+            )
+        } catch let error as URLError {
+            syncStatus = "Error"
+            lastErrorMessage = error.localizedDescription
+            DiagnosticsLogger.record(error: error, context: "Usage report failed")
+            recordLog("Report failed (\(reason)): \(error.localizedDescription)")
+            return force ? .unreachable : nil
         } catch {
             syncStatus = "Error"
             lastErrorMessage = error.localizedDescription
             DiagnosticsLogger.record(error: error, context: "Usage report failed")
             recordLog("Report failed (\(reason)): \(error.localizedDescription)")
+            if force {
+                if case ServerSyncClientError.invalidServerResponse = error {
+                    return .unreachable
+                }
+                return .error(error.localizedDescription)
+            }
+            return nil
         }
     }
 
@@ -425,12 +494,10 @@ final class SyncController: ObservableObject {
             if !ackPending.isEmpty {
                 try await syncClient.sendCommandAcks(
                     CommandAcksUploadPayload(
-                        commandAcks: ackPending.map {
+                        acks: ackPending.map {
                             CommandAckUploadEntryPayload(
                                 commandId: $0.commandId,
-                                commandName: $0.commandName,
-                                protocolVersion: $0.protocolVersion,
-                                acknowledgedAt: timestampString(Date())
+                                receivedAt: timestampString(Date())
                             )
                         }
                     ),
@@ -445,23 +512,22 @@ final class SyncController: ObservableObject {
                 let result = try execute(command: command)
                 try commandStore.storeExecutionResult(result, for: command.commandId)
                 lastCommandDescription = "\(command.commandName): \(result.status.lowercased())"
-                recordLog("Executed server command \(command.commandName) (\(reason)): \(result.message)")
+                recordLog("Executed server command \(command.commandName) (\(reason)): \(result.status)")
             }
 
             let resultPending = try commandStore.commandsPendingResultUpload()
             if !resultPending.isEmpty {
                 try await syncClient.sendCommandResults(
                     CommandResultsUploadPayload(
-                        commandResults: resultPending.compactMap { command in
+                        results: resultPending.compactMap { command in
                             guard let result = command.executionResult else { return nil }
                             return CommandResultUploadEntryPayload(
                                 commandId: command.commandId,
                                 commandName: command.commandName,
-                                protocolVersion: command.protocolVersion,
                                 completedAt: result.completedAt,
                                 status: result.status,
-                                message: result.message,
-                                details: result.details
+                                responseType: result.responseType,
+                                responsePayload: result.responsePayload
                             )
                         }
                     ),
@@ -469,11 +535,6 @@ final class SyncController: ObservableObject {
                 )
                 try commandStore.markResultsUploaded(commandIDs: resultPending.map(\.commandId))
                 recordLog("Uploaded \(resultPending.count) command result(s) (\(reason))")
-            }
-
-            if let action = pendingLifecycleAction {
-                pendingLifecycleAction = nil
-                onLifecycleShutdown?(action)
             }
 
             lastErrorMessage = nil
@@ -497,41 +558,125 @@ final class SyncController: ObservableObject {
         refreshDiagnosticsState()
     }
 
+    private func lifecycleAction(for commandName: String) -> LifecycleShutdownAction? {
+        switch commandName.uppercased() {
+        case "DISABLE": return .disable
+        case "UNINSTALL": return .uninstall
+        default: return nil
+        }
+    }
+
+    private func lifecycleResult(for action: LifecycleShutdownAction) -> StoredCommandExecutionResult {
+        switch action {
+        case .disable:
+            return StoredCommandExecutionResult(
+                completedAt: timestampString(Date()),
+                status: "SUCCEEDED",
+                responseType: "DISABLE_V1",
+                responsePayload: [
+                    "message": "Disable command accepted; agent will shut down after result upload.",
+                ]
+            )
+        case .uninstall:
+            return StoredCommandExecutionResult(
+                completedAt: timestampString(Date()),
+                status: "SUCCEEDED",
+                responseType: "UNINSTALL_V1",
+                responsePayload: [
+                    "message": "Uninstall command accepted; agent will remove local state and shut down after result upload.",
+                ]
+            )
+        }
+    }
+
+    /// Handles DISABLE/UNINSTALL commands that arrived in a report response. Unlike queue
+    /// commands, lifecycle commands are not deduplicated locally: every delivery confirms the
+    /// command with the server (so it stops being redelivered and a future manual relaunch
+    /// behaves normally) and then triggers shutdown. Confirmation is best-effort — if it fails
+    /// the agent still shuts down so the parent's intent is honoured.
+    private func handleLifecycleCommands(
+        _ commands: [ServerCommandPayload],
+        reason: String,
+        registration: RegistrationRecord
+    ) async {
+        guard !isLifecycleShutdownInProgress else { return }
+
+        // UNINSTALL is the more destructive action, so prefer it if both are pending.
+        let selected = commands.first { lifecycleAction(for: $0.commandName) == .uninstall }
+            ?? commands.first { lifecycleAction(for: $0.commandName) == .disable }
+        guard let command = selected, let action = lifecycleAction(for: command.commandName) else { return }
+
+        isLifecycleShutdownInProgress = true
+        recordLog("Received lifecycle command \(command.commandName) (\(reason)); confirming with server before shutting down")
+
+        let result = lifecycleResult(for: action)
+        do {
+            try await syncClient.sendCommandAcks(
+                CommandAcksUploadPayload(
+                    acks: [
+                        CommandAckUploadEntryPayload(
+                            commandId: command.commandId,
+                            receivedAt: timestampString(Date())
+                        )
+                    ]
+                ),
+                registration: registration
+            )
+            try await syncClient.sendCommandResults(
+                CommandResultsUploadPayload(
+                    results: [
+                        CommandResultUploadEntryPayload(
+                            commandId: command.commandId,
+                            commandName: command.commandName,
+                            completedAt: result.completedAt,
+                            status: result.status,
+                            responseType: result.responseType,
+                            responsePayload: result.responsePayload
+                        )
+                    ]
+                ),
+                registration: registration
+            )
+            recordLog("Confirmed lifecycle command \(command.commandName) with server")
+        } catch {
+            DiagnosticsLogger.record(error: error, context: "Failed to confirm lifecycle command \(command.commandName)")
+            recordLog("Failed to confirm lifecycle command \(command.commandName) with server: \(error.localizedDescription); shutting down anyway")
+        }
+
+        lastCommandDescription = "\(command.commandName): \(result.status.lowercased())"
+        refreshDiagnosticsState()
+        recordLog("Executing lifecycle command \(command.commandName) (\(reason))")
+        onLifecycleShutdown?(action)
+    }
+
     private func execute(command: StoredServerCommand) throws -> StoredCommandExecutionResult {
         switch command.commandName.uppercased() {
         case "SEND_LOGS":
             let archive = try diagnosticsLogStore.exportArchive()
+            let completedAt = timestampString(Date())
             return StoredCommandExecutionResult(
-                completedAt: timestampString(Date()),
-                status: "COMPLETED",
-                message: archive.lineCount == 0 ? "No diagnostics logs were available." : "Uploaded \(archive.lineCount) diagnostics log line(s).",
-                details: [
-                    "logs": archive.text,
-                    "lineCount": String(archive.lineCount),
+                completedAt: completedAt,
+                status: "SUCCEEDED",
+                responseType: "SEND_LOGS_V1",
+                responsePayload: [
+                    "logsText": archive.text,
+                    "truncated": "false",
+                    "collectedAt": completedAt,
                 ]
             )
         case "DISABLE":
-            pendingLifecycleAction = .disable
-            return StoredCommandExecutionResult(
-                completedAt: timestampString(Date()),
-                status: "COMPLETED",
-                message: "Disable command accepted; agent will shut down after result upload.",
-                details: [:]
-            )
+            // Lifecycle commands are normally handled by handleLifecycleCommands and never
+            // enter the queue. This case is defensive (e.g. stale queued rows) and has no
+            // side effects beyond reporting success.
+            return lifecycleResult(for: .disable)
         case "UNINSTALL":
-            pendingLifecycleAction = .uninstall
-            return StoredCommandExecutionResult(
-                completedAt: timestampString(Date()),
-                status: "COMPLETED",
-                message: "Uninstall command accepted; agent will remove local state and shut down after result upload.",
-                details: [:]
-            )
+            return lifecycleResult(for: .uninstall)
         default:
             return StoredCommandExecutionResult(
                 completedAt: timestampString(Date()),
                 status: "FAILED",
-                message: "Unsupported server command \(command.commandName).",
-                details: ["commandName": command.commandName]
+                responseType: "UNSUPPORTED_COMMAND_V1",
+                responsePayload: ["receivedCommandName": command.commandName]
             )
         }
     }
@@ -625,8 +770,8 @@ struct StoredServerCommand: Equatable {
 struct StoredCommandExecutionResult: Codable, Equatable {
     let completedAt: String
     let status: String
-    let message: String
-    let details: [String: String]
+    let responseType: String
+    let responsePayload: [String: String]
 }
 
 final class SQLiteServerCommandStore: ServerCommandStoreProtocol {

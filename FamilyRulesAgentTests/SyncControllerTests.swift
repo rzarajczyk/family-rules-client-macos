@@ -72,6 +72,67 @@ final class SyncControllerTests: XCTestCase {
         XCTAssertEqual(controller.syncStatus, "Paused")
     }
 
+    func testManualRefreshForcesReportWhenInactive() async throws {
+        let activityMonitor = ActivityMonitorStub(
+            snapshotValue: UsageSnapshot(
+                screenTimeSeconds: 30,
+                applications: ["com.apple.finder": 30],
+                activeApps: [],
+                visibleApplications: [:],
+                visibleApps: [],
+                knownApps: ["com.apple.finder": KnownAppInfo(identifier: "com.apple.finder", name: "Finder")],
+                isEligibleForReporting: false
+            )
+        )
+        let client = ServerSyncClientStub(
+            reportResponse: ReportResponsePayload(
+                deviceState: "BLOCK_RESTRICTED_APPS_WITH_TIMEOUT",
+                extra: "30",
+                serverCommands: [
+                    ServerCommandPayload(
+                        commandId: "cmd-refresh",
+                        commandName: "SEND_LOGS",
+                        issuedAt: "2026-05-09T10:00:00Z",
+                        protocolVersion: 1
+                    )
+                ]
+            )
+        )
+        let controller = SyncController(
+            activityMonitor: activityMonitor,
+            syncClient: client,
+            appVersionProvider: { "1.0.0" },
+            timezoneProvider: { 0 },
+            automaticLoops: false
+        )
+
+        await controller.start(registration: registration)
+
+        let reportCountBeforeRefresh = await client.reportPayloadCount()
+        let outcome = await controller.manualRefresh()
+        let reportCountAfterRefresh = await client.reportPayloadCount()
+
+        XCTAssertEqual(reportCountBeforeRefresh, 0)
+        XCTAssertEqual(reportCountAfterRefresh, 1)
+        XCTAssertEqual(
+            outcome,
+            .success(
+                deviceState: "BLOCK_RESTRICTED_APPS_WITH_TIMEOUT",
+                extra: "30",
+                serverCommands: [
+                    ServerCommandPayload(
+                        commandId: "cmd-refresh",
+                        commandName: "SEND_LOGS",
+                        issuedAt: "2026-05-09T10:00:00Z",
+                        protocolVersion: 1
+                    )
+                ]
+            )
+        )
+        XCTAssertEqual(controller.lastDeviceState, "BLOCK_RESTRICTED_APPS_WITH_TIMEOUT")
+        XCTAssertEqual(controller.syncStatus, "Paused")
+    }
+
     func testKnownAppChangeTriggersImmediateClientInfo() async throws {
         let activityMonitor = ActivityMonitorStub(
             snapshotValue: UsageSnapshot(
@@ -319,18 +380,17 @@ final class SyncControllerTests: XCTestCase {
 
         let ackPayloadValue = await client.lastCommandAcksPayload()
         let ackPayload = try XCTUnwrap(ackPayloadValue)
-        XCTAssertEqual(ackPayload.commandAcks.map(\.commandId), ["cmd-1"])
+        XCTAssertEqual(ackPayload.acks.map(\.commandId), ["cmd-1"])
 
         let resultPayloadValue = await client.lastCommandResultsPayload()
         let resultPayload = try XCTUnwrap(resultPayloadValue)
-        XCTAssertEqual(resultPayload.commandResults.map(\.commandId), ["cmd-1"])
-        XCTAssertEqual(resultPayload.commandResults.first?.status, "COMPLETED")
-        let uploadedLogs = try XCTUnwrap(resultPayload.commandResults.first?.details["logs"])
+        XCTAssertEqual(resultPayload.results.map(\.commandId), ["cmd-1"])
+        XCTAssertEqual(resultPayload.results.first?.status, "SUCCEEDED")
+        XCTAssertEqual(resultPayload.results.first?.responseType, "SEND_LOGS_V1")
+        let uploadedLogs = try XCTUnwrap(resultPayload.results.first?.responsePayload["logsText"])
         XCTAssertTrue(uploadedLogs.contains("Existing log line"))
-        let uploadedLineCountString = try XCTUnwrap(resultPayload.commandResults.first?.details["lineCount"])
-        XCTAssertGreaterThan(Int(uploadedLineCountString) ?? 0, 0)
         XCTAssertEqual(controller.pendingCommandCount, 0)
-        XCTAssertEqual(controller.lastCommandDescription, "SEND_LOGS: completed")
+        XCTAssertEqual(controller.lastCommandDescription, "SEND_LOGS: succeeded")
     }
 
     func testUnknownCommandProducesFailedResult() async throws {
@@ -367,9 +427,9 @@ final class SyncControllerTests: XCTestCase {
 
         let resultPayloadValue = await client.lastCommandResultsPayload()
         let resultPayload = try XCTUnwrap(resultPayloadValue)
-        XCTAssertEqual(resultPayload.commandResults.map(\.commandId), ["cmd-2"])
-        XCTAssertEqual(resultPayload.commandResults.first?.status, "FAILED")
-        XCTAssertEqual(resultPayload.commandResults.first?.details["commandName"], "UNKNOWN_COMMAND")
+        XCTAssertEqual(resultPayload.results.map(\.commandId), ["cmd-2"])
+        XCTAssertEqual(resultPayload.results.first?.status, "FAILED")
+        XCTAssertEqual(resultPayload.results.first?.responsePayload["receivedCommandName"], "UNKNOWN_COMMAND")
         XCTAssertEqual(controller.pendingCommandCount, 0)
         XCTAssertEqual(controller.lastCommandDescription, "UNKNOWN_COMMAND: failed")
     }
@@ -428,11 +488,11 @@ final class SyncControllerTests: XCTestCase {
 
         let retriedAckPayloadValue = await secondClient.lastCommandAcksPayload()
         let retriedAckPayload = try XCTUnwrap(retriedAckPayloadValue)
-        XCTAssertEqual(retriedAckPayload.commandAcks.map(\.commandId), ["cmd-1"])
+        XCTAssertEqual(retriedAckPayload.acks.map(\.commandId), ["cmd-1"])
 
         let retriedResultPayloadValue = await secondClient.lastCommandResultsPayload()
         let retriedResultPayload = try XCTUnwrap(retriedResultPayloadValue)
-        XCTAssertEqual(retriedResultPayload.commandResults.map(\.commandId), ["cmd-1"])
+        XCTAssertEqual(retriedResultPayload.results.map(\.commandId), ["cmd-1"])
         XCTAssertEqual(secondController.pendingCommandCount, 0)
     }
 
@@ -485,11 +545,11 @@ final class SyncControllerTests: XCTestCase {
 
         let resultPayloadValue = await client.lastCommandResultsPayload()
         let resultPayload = try XCTUnwrap(resultPayloadValue)
-        XCTAssertEqual(resultPayload.commandResults.map(\.commandId), ["cmd-lifecycle"])
-        XCTAssertEqual(resultPayload.commandResults.first?.status, "COMPLETED")
-        XCTAssertTrue(resultPayload.commandResults.first?.message.contains(expectedMessageFragment) == true)
+        XCTAssertEqual(resultPayload.results.map(\.commandId), ["cmd-lifecycle"])
+        XCTAssertEqual(resultPayload.results.first?.status, "SUCCEEDED")
+        XCTAssertTrue(resultPayload.results.first?.responsePayload["message"]?.contains(expectedMessageFragment) == true)
         XCTAssertEqual(controller.pendingCommandCount, 0)
-        XCTAssertEqual(controller.lastCommandDescription, "\(commandName): completed")
+        XCTAssertEqual(controller.lastCommandDescription, "\(commandName): succeeded")
 
         let uploadCompleted = await client.resultUploadCompleted()
         XCTAssertTrue(uploadCompleted)

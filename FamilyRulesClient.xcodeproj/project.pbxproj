@@ -49,6 +49,7 @@
 		A100002C000000000000000A /* LocalAccountIdentityTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A100013C000000000000000A /* LocalAccountIdentityTests.swift */; };
 		A100002D000000000000000B /* PlaybackBlocker.swift in Sources */ = {isa = PBXBuildFile; fileRef = A100013D000000000000000B /* PlaybackBlocker.swift */; };
 		A100002E000000000000000C /* NowPlayingCliTool.swift in Sources */ = {isa = PBXBuildFile; fileRef = A100013F000000000000000C /* NowPlayingCliTool.swift */; };
+		A100002F000000000000000D /* RefreshStateDialog.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000140000000000000000D /* RefreshStateDialog.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -110,6 +111,7 @@
 		A100013C000000000000000A /* LocalAccountIdentityTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalAccountIdentityTests.swift; sourceTree = "<group>"; };
 		A100013D000000000000000B /* PlaybackBlocker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaybackBlocker.swift; sourceTree = "<group>"; };
 		A100013F000000000000000C /* NowPlayingCliTool.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NowPlayingCliTool.swift; sourceTree = "<group>"; };
+		A1000140000000000000000D /* RefreshStateDialog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RefreshStateDialog.swift; sourceTree = "<group>"; };
 		A100013E000000000000000C /* MediaRemoteProbeSource.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = MediaRemoteProbeSource.txt; sourceTree = "<group>"; };
 		A10001380000000000000009 /* en */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = en; path = en.lproj/Localizable.strings; sourceTree = "<group>"; };
 		A10001390000000000000009 /* Localizable.strings */ = {isa = PBXVariantGroup; children = (A10001380000000000000009 /* en */, A100013A0000000000000009 /* pl */, ); name = Localizable.strings; sourceTree = "<group>"; };
@@ -173,6 +175,7 @@
 				A10001090000000000000002 /* AppModel.swift */,
 				A10001010000000000000001 /* AppDelegate.swift */,
 				A10001230000000000000004 /* DashboardView.swift */,
+				A1000140000000000000000D /* RefreshStateDialog.swift */,
 				A10001260000000000000006 /* DeviceStateController.swift */,
 				A10001020000000000000001 /* DiagnosticsStore.swift */,
 				A10001030000000000000001 /* DiagnosticsView.swift */,
@@ -432,6 +435,7 @@
 				A10000090000000000000002 /* AppModel.swift in Sources */,
 				A10000010000000000000001 /* AppDelegate.swift in Sources */,
 				A10000220000000000000004 /* DashboardView.swift in Sources */,
+				A100002F000000000000000D /* RefreshStateDialog.swift in Sources */,
 				A10000250000000000000006 /* DeviceStateController.swift in Sources */,
 				A10000020000000000000001 /* DiagnosticsStore.swift in Sources */,
 				A10000030000000000000001 /* DiagnosticsView.swift in Sources */,

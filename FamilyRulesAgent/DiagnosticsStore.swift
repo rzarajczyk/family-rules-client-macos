@@ -1,3 +1,4 @@
+import AppKit
 import Combine
 import Foundation
 import ServiceManagement
@@ -8,6 +9,28 @@ final class DiagnosticsStore: ObservableObject {
     @Published var helperLastReply = "No ping yet"
     @Published var serviceManagementState = ServiceManagementBridge.registrationDescription()
     @Published private(set) var logFileLocation = AgentPersistencePaths.diagnosticsLogURL.path(percentEncoded: false)
+
+    var logFileURL: URL {
+        AgentPersistencePaths.diagnosticsLogURL
+    }
+
+    func openLogFile() {
+        let url = logFileURL
+        let fileManager = FileManager.default
+        let path = url.path(percentEncoded: false)
+
+        if !fileManager.fileExists(atPath: path) {
+            try? fileManager.createDirectory(
+                at: url.deletingLastPathComponent(),
+                withIntermediateDirectories: true
+            )
+            fileManager.createFile(atPath: path, contents: nil)
+        }
+
+        if !NSWorkspace.shared.open(url) {
+            NSWorkspace.shared.activateFileViewerSelecting([url])
+        }
+    }
 
     func refreshServiceManagementState() {
         serviceManagementState = ServiceManagementBridge.registrationDescription()

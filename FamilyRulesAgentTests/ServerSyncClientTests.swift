@@ -101,9 +101,9 @@ final class ServerSyncClientTests: XCTestCase {
 
             let body = try readBody(from: request)
             let payload = try JSONDecoder().decode(CommandAcksUploadPayload.self, from: Data(body.utf8))
-            try requireEqual(payload.commandAcks.count, 1)
-            try requireEqual(payload.commandAcks.first?.commandId, "cmd-1")
-            try requireEqual(payload.commandAcks.first?.commandName, "SEND_LOGS")
+            try requireEqual(payload.acks.count, 1)
+            try requireEqual(payload.acks.first?.commandId, "cmd-1")
+            try requireEqual(payload.acks.first?.receivedAt, "2026-05-09T10:00:00Z")
 
             let response = HTTPURLResponse(url: try requireValue(request.url, "Missing request URL"), statusCode: 200, httpVersion: nil, headerFields: nil)!
             return (response, Data(#"{"status":"ok"}"#.utf8))
@@ -111,12 +111,10 @@ final class ServerSyncClientTests: XCTestCase {
 
         try await client.sendCommandAcks(
             CommandAcksUploadPayload(
-                commandAcks: [
+                acks: [
                     CommandAckUploadEntryPayload(
                         commandId: "cmd-1",
-                        commandName: "SEND_LOGS",
-                        protocolVersion: 1,
-                        acknowledgedAt: "2026-05-09T10:00:00Z"
+                        receivedAt: "2026-05-09T10:00:00Z"
                     ),
                 ]
             ),
@@ -133,10 +131,11 @@ final class ServerSyncClientTests: XCTestCase {
 
             let body = try readBody(from: request)
             let payload = try JSONDecoder().decode(CommandResultsUploadPayload.self, from: Data(body.utf8))
-            try requireEqual(payload.commandResults.count, 1)
-            try requireEqual(payload.commandResults.first?.commandId, "cmd-1")
-            try requireEqual(payload.commandResults.first?.status, "COMPLETED")
-            try requireEqual(payload.commandResults.first?.details["lineCount"], "2")
+            try requireEqual(payload.results.count, 1)
+            try requireEqual(payload.results.first?.commandId, "cmd-1")
+            try requireEqual(payload.results.first?.status, "SUCCEEDED")
+            try requireEqual(payload.results.first?.responseType, "SEND_LOGS_V1")
+            try requireEqual(payload.results.first?.responsePayload["logsText"], "line 1\nline 2")
 
             let response = HTTPURLResponse(url: try requireValue(request.url, "Missing request URL"), statusCode: 200, httpVersion: nil, headerFields: nil)!
             return (response, Data(#"{"status":"ok"}"#.utf8))
@@ -144,15 +143,14 @@ final class ServerSyncClientTests: XCTestCase {
 
         try await client.sendCommandResults(
             CommandResultsUploadPayload(
-                commandResults: [
+                results: [
                     CommandResultUploadEntryPayload(
                         commandId: "cmd-1",
                         commandName: "SEND_LOGS",
-                        protocolVersion: 1,
                         completedAt: "2026-05-09T10:01:00Z",
-                        status: "COMPLETED",
-                        message: "Uploaded logs.",
-                        details: ["lineCount": "2", "logs": "line 1\nline 2"]
+                        status: "SUCCEEDED",
+                        responseType: "SEND_LOGS_V1",
+                        responsePayload: ["logsText": "line 1\nline 2", "truncated": "false", "collectedAt": "2026-05-09T10:01:00Z"]
                     ),
                 ]
             ),

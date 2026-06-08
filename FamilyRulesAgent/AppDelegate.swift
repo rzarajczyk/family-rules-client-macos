@@ -95,6 +95,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
         activityMonitor.start()
+        activityMonitor.onUsageSnapshotUpdated = { [weak self] in
+            self?.updateStateWindowIfNeeded()
+        }
         configureStatusItem()
         startRefreshLoop()
         syncController.onLifecycleShutdown = { [weak self] action in
@@ -125,8 +128,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 lifecycleController: lifecycleController,
                 allDevicesModel: allDevicesModel,
                 onOpenDiagnostics: { [weak self] in self?.openDiagnosticsWindow() },
-                onOpenSetup: { [weak self] in self?.openSetupWindow() },
-                onPingHelper: { [weak self] in self?.pingHelper() },
                 onFixPermissions: { [weak self] in self?.openPermissionsSetupWindow() },
                 onUnregister: { [weak self] in self?.unregisterThisMac() },
                 onDebugQuit: { [weak self] in self?.debugQuit() }
@@ -139,8 +140,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 lifecycleController: lifecycleController,
                 allDevicesModel: allDevicesModel,
                 onOpenDiagnostics: { [weak self] in self?.openDiagnosticsWindow() },
-                onOpenSetup: { [weak self] in self?.openSetupWindow() },
-                onPingHelper: { [weak self] in self?.pingHelper() },
                 onFixPermissions: { [weak self] in self?.openPermissionsSetupWindow() },
                 onUnregister: { [weak self] in self?.unregisterThisMac() }
             ))
@@ -302,7 +301,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     private func updateStateWindow() {
-        let snapshot = activityMonitor.snapshot()
+        let snapshot = activityMonitor.usageSnapshot
         let lockScreenActive = lifecycleController.normalizedState == "LOCK_SCREEN"
         let blockedAppIdentifiers = syncController.blockedAppIdentifiers.union(temporaryBlockedApp.map { [$0.appPath] } ?? [])
         let blockedAppNames = syncController.blockedAppNames.merging(temporaryBlockedApp.map { [$0.appPath: $0.appName ?? $0.appPath] } ?? [:]) { _, new in new }
@@ -518,7 +517,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     private func startBlockRestrictedAppsTest() {
-        let snapshot = activityMonitor.snapshot()
+        let snapshot = activityMonitor.usageSnapshot
         let targetIdentifier = snapshot.activeApps.first
             ?? snapshot.visibleApps.first
             ?? snapshot.knownApps.keys.sorted().first
@@ -594,14 +593,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let openDiagnostics = NSMenuItem(title: "Open Diagnostics", action: #selector(openDiagnosticsWindow), keyEquivalent: "")
         openDiagnostics.target = self
         menu.addItem(openDiagnostics)
-
-        let openSetup = NSMenuItem(title: "Open Setup", action: #selector(openSetupWindow), keyEquivalent: "")
-        openSetup.target = self
-        menu.addItem(openSetup)
-
-        let pingHelper = NSMenuItem(title: "Ping Helper", action: #selector(pingHelper), keyEquivalent: "")
-        pingHelper.target = self
-        menu.addItem(pingHelper)
 
         menu.addItem(.separator())
 
@@ -711,7 +702,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         foregroundAppMenuItem?.title = "Foreground: \(activityMonitor.frontmostApplicationName)"
         lifecycleStatusMenuItem?.title = "Lifecycle: \(lifecycleController.statusDescription)"
         updateStatusItemImage()
-        updateStateWindow()
+    }
+
+    private func updateStateWindowIfNeeded() {
+        if needsStateOverlayRefresh || !stateWindowControllers.isEmpty {
+            updateStateWindow()
+        }
+    }
+
+    private var needsStateOverlayRefresh: Bool {
+        lifecycleController.lastObservedDeviceState != "ACTIVE"
+            || lifecycleController.countdownPresentation != nil
+            || !syncController.blockedAppIdentifiers.isEmpty
     }
 
     private func updateStatusItemImage() {
@@ -725,7 +727,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         refreshTask?.cancel()
         refreshTask = Task { @MainActor [weak self] in
             while !Task.isCancelled {
-                self?.refreshMenuStatusItems()
+                guard let self else { return }
+
+                self.refreshMenuStatusItems()
+
+                if self.needsStateOverlayRefresh || !self.stateWindowControllers.isEmpty {
+                    self.updateStateWindow()
+                }
 
                 do {
                     try await Task.sleep(for: .seconds(1))
