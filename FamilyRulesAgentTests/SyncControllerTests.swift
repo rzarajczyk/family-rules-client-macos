@@ -37,7 +37,18 @@ final class SyncControllerTests: XCTestCase {
         let lastClientInfoPayload = try XCTUnwrap(lastClientInfoPayloadValue)
         XCTAssertEqual(
             lastClientInfoPayload.capabilities,
-            ["SEND_LOGS_COMMAND", "COMMANDS_PULL", "MEDIA_PLAYBACK_REPORT", "MEDIA_PLAYBACK_BLOCK", "DISABLE_COMMAND", "UNINSTALL_COMMAND"]
+            SyncController.advertisedCapabilities(nowPlayingCliInstalled: NowPlayingCliTool.isInstalled)
+        )
+    }
+
+    func testAdvertisedCapabilitiesIncludePlaybackOnlyWhenNowPlayingCliInstalled() {
+        XCTAssertEqual(
+            SyncController.advertisedCapabilities(nowPlayingCliInstalled: false),
+            ["SEND_LOGS_COMMAND", "COMMANDS_PULL", "DISABLE_COMMAND", "UNINSTALL_COMMAND"]
+        )
+        XCTAssertEqual(
+            SyncController.advertisedCapabilities(nowPlayingCliInstalled: true),
+            ["SEND_LOGS_COMMAND", "COMMANDS_PULL", "DISABLE_COMMAND", "UNINSTALL_COMMAND", "MEDIA_PLAYBACK_REPORT", "MEDIA_PLAYBACK_BLOCK"]
         )
     }
 

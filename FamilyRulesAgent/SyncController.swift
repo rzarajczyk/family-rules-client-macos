@@ -240,7 +240,7 @@ final class SyncController: ObservableObject {
             timezoneOffsetSeconds: timezoneProvider(),
             reportIntervalSeconds: reportIntervalSeconds,
             knownApps: snapshot.knownApps.mapValues { KnownAppPayload(appName: $0.name, iconBase64Png: iconBase64Png(for: $0.identifier)) },
-            capabilities: ["SEND_LOGS_COMMAND", "COMMANDS_PULL", "MEDIA_PLAYBACK_REPORT", "MEDIA_PLAYBACK_BLOCK", "DISABLE_COMMAND", "UNINSTALL_COMMAND"]
+            capabilities: Self.advertisedCapabilities()
         )
 
         do {
@@ -732,6 +732,21 @@ final class SyncController: ObservableObject {
 
     nonisolated private static func defaultAppVersion() -> String {
         (Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String) ?? "0.1.0"
+    }
+
+    /// Capabilities sent in `/api/v2/client-info`.
+    /// Playback reporting and blocking both require `nowplaying-cli` for MediaRemote detection.
+    nonisolated static func advertisedCapabilities(nowPlayingCliInstalled: Bool = NowPlayingCliTool.isInstalled) -> [String] {
+        var capabilities = [
+            "SEND_LOGS_COMMAND",
+            "COMMANDS_PULL",
+            "DISABLE_COMMAND",
+            "UNINSTALL_COMMAND",
+        ]
+        if nowPlayingCliInstalled {
+            capabilities.append(contentsOf: ["MEDIA_PLAYBACK_REPORT", "MEDIA_PLAYBACK_BLOCK"])
+        }
+        return capabilities
     }
 }
 
