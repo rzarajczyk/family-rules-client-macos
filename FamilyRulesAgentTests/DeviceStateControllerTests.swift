@@ -120,11 +120,8 @@ private actor HelperLifecycleClientActionStub: HelperLifecycleClientProtocol {
 
     func fetchLifecycleStatus() async throws -> HelperLifecycleStatusPayload {
         HelperLifecycleStatusPayload(
-            isAdminDisabled: false,
             lastHeartbeatAt: nil,
             lastObservedDeviceState: "ACTIVE",
-            lastPollDescription: nil,
-            lastRelaunchDescription: nil,
             lastActionDescription: nil
         )
     }

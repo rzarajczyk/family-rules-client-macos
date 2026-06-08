@@ -2,6 +2,11 @@ import AppKit
 import Foundation
 import SQLite3
 
+enum LifecycleShutdownAction: Equatable {
+    case disable
+    case uninstall
+}
+
 @MainActor
 final class SyncController: ObservableObject {
     @Published private(set) var syncStatus = "Idle"
@@ -40,6 +45,9 @@ final class SyncController: ObservableObject {
     private var isFetchingBlockedApps = false
     private var isFetchingBlockedPlaybackApps = false
     private var isProcessingCommands = false
+    private var pendingLifecycleAction: LifecycleShutdownAction?
+
+    var onLifecycleShutdown: ((LifecycleShutdownAction) -> Void)?
 
     init(
         activityMonitor: any ActivityMonitorProtocol,
@@ -166,12 +174,6 @@ final class SyncController: ObservableObject {
     func sendClientInfo(reason: String) async {
         guard let registration, !isSendingClientInfo else { return }
 
-        if lifecycleController?.isAdminDisabled == true {
-            syncStatus = "Admin Disabled"
-            recordLog("Skipped client-info (\(reason)) while admin disabled")
-            return
-        }
-
         isSendingClientInfo = true
         defer { isSendingClientInfo = false }
 
@@ -182,13 +184,6 @@ final class SyncController: ObservableObject {
                 AvailableStatePayload(
                     deviceState: "ACTIVE",
                     title: "Active",
-                    icon: nil,
-                    description: nil,
-                    arguments: nil
-                ),
-                AvailableStatePayload(
-                    deviceState: "APP_DISABLED",
-                    title: "Admin Disabled",
                     icon: nil,
                     description: nil,
                     arguments: nil
@@ -239,7 +234,7 @@ final class SyncController: ObservableObject {
             timezoneOffsetSeconds: timezoneProvider(),
             reportIntervalSeconds: reportIntervalSeconds,
             knownApps: snapshot.knownApps.mapValues { KnownAppPayload(appName: $0.name, iconBase64Png: iconBase64Png(for: $0.identifier)) },
-            capabilities: ["LOGS_COMMAND", "COMMANDS_PULL", "MEDIA_PLAYBACK_REPORT", "MEDIA_PLAYBACK_BLOCK"]
+            capabilities: ["LOGS_COMMAND", "COMMANDS_PULL", "MEDIA_PLAYBACK_REPORT", "MEDIA_PLAYBACK_BLOCK", "DISABLE_COMMAND", "UNINSTALL_COMMAND"]
         )
 
         do {
@@ -259,12 +254,6 @@ final class SyncController: ObservableObject {
 
     func sendReportIfEligible(reason: String) async {
         guard let registration, !isSendingReport else { return }
-
-        if lifecycleController?.isAdminDisabled == true {
-            syncStatus = "Admin Disabled"
-            recordLog("Skipped report (\(reason)) while admin disabled")
-            return
-        }
 
         let snapshot = activityMonitor.snapshot()
         guard snapshot.isEligibleForReporting else {
@@ -300,7 +289,7 @@ final class SyncController: ObservableObject {
             await refreshBlockedPlaybackAppsIfNeeded(reason: reason, deviceState: response.deviceState)
             try storeIncomingCommands(response.serverCommands, reason: reason)
             lastErrorMessage = nil
-            syncStatus = lifecycleController?.isAdminDisabled == true ? "Admin Disabled" : "Healthy"
+            syncStatus = "Healthy"
             recordLog("Sent report (\(reason)) with \(snapshot.applications.count) apps and state \(response.deviceState)")
             await processPendingCommands(reason: "report \(reason)")
         } catch {
@@ -482,6 +471,11 @@ final class SyncController: ObservableObject {
                 recordLog("Uploaded \(resultPending.count) command result(s) (\(reason))")
             }
 
+            if let action = pendingLifecycleAction {
+                pendingLifecycleAction = nil
+                onLifecycleShutdown?(action)
+            }
+
             lastErrorMessage = nil
             lastCommandErrorMessage = nil
         } catch {
@@ -515,6 +509,22 @@ final class SyncController: ObservableObject {
                     "logs": archive.text,
                     "lineCount": String(archive.lineCount),
                 ]
+            )
+        case "DISABLE":
+            pendingLifecycleAction = .disable
+            return StoredCommandExecutionResult(
+                completedAt: timestampString(Date()),
+                status: "COMPLETED",
+                message: "Disable command accepted; agent will shut down after result upload.",
+                details: [:]
+            )
+        case "UNINSTALL":
+            pendingLifecycleAction = .uninstall
+            return StoredCommandExecutionResult(
+                completedAt: timestampString(Date()),
+                status: "COMPLETED",
+                message: "Uninstall command accepted; agent will remove local state and shut down after result upload.",
+                details: [:]
             )
         default:
             return StoredCommandExecutionResult(

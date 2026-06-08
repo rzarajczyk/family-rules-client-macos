@@ -3,7 +3,6 @@ import ServiceManagement
 
 @MainActor
 protocol LifecycleControlling: AnyObject {
-    var isAdminDisabled: Bool { get }
     var statusDescription: String { get }
     var loginItemStatusDescription: String { get }
     var helperStatusDescription: String { get }
@@ -21,14 +20,12 @@ protocol LifecycleControlling: AnyObject {
 
 @MainActor
 final class LifecycleController: ObservableObject, LifecycleControlling {
-    @Published private(set) var isAdminDisabled = false
     @Published private(set) var loginItemStatusDescription = ServiceManagementBridge.registrationDescription()
     @Published private(set) var helperStatusDescription = "Unknown"
     @Published private(set) var lastObservedDeviceState = "Unknown"
 
     var statusDescription: String {
         guard registration != nil else { return "Inactive" }
-        if isAdminDisabled { return "Admin Disabled" }
         switch lastObservedDeviceState {
         case "ACTIVE":
             return "Protected"
@@ -90,9 +87,6 @@ final class LifecycleController: ObservableObject, LifecycleControlling {
 
     func start(registration: RegistrationRecord) {
         self.registration = registration
-        // Always reset admin-disabled on a fresh start; the server state
-        // will be re-established on the first report cycle.
-        isAdminDisabled = false
         lastObservedDeviceState = "ACTIVE"
         deviceStateController.clear()
 
@@ -112,25 +106,16 @@ final class LifecycleController: ObservableObject, LifecycleControlling {
         guard registration != nil else { return }
 
         let normalizedState = LifecycleStateBridge.normalize(rawState)
-        let shouldBeAdminDisabled = LifecycleStateBridge.isAdminDisabled(normalizedState)
         lastObservedDeviceState = normalizedState
         deviceStateController.apply(rawState: normalizedState, extra: extra)
-
-        if isAdminDisabled != shouldBeAdminDisabled {
-            isAdminDisabled = shouldBeAdminDisabled
-        }
         objectWillChange.send()
 
-        // Always push to helper so the heartbeat timestamp stays fresh,
-        // regardless of whether the local boolean changed.
         Task {
             await updateHelperStatus(lastObservedState: normalizedState)
         }
     }
 
     func stop() {
-        // Notify the helper that the agent is going inactive so it can
-        // stop its reactivation timer and clear stale state.
         if let registration {
             let payload = AgentStatusPayload(
                 registration: HelperRegistrationPayload(
@@ -141,7 +126,6 @@ final class LifecycleController: ObservableObject, LifecycleControlling {
                     instanceName: registration.instanceName
                 ),
                 agentBundleIdentifier: bundleIdentifierProvider(),
-                isAdminDisabled: false,
                 lastObservedDeviceState: "ACTIVE",
                 sentAt: now()
             )
@@ -153,7 +137,6 @@ final class LifecycleController: ObservableObject, LifecycleControlling {
         self.registration = nil
         deviceStateController.clear()
         lastObservedDeviceState = "Unknown"
-        isAdminDisabled = false
         objectWillChange.send()
     }
 
@@ -195,7 +178,6 @@ final class LifecycleController: ObservableObject, LifecycleControlling {
                 instanceName: registration.instanceName
             ),
             agentBundleIdentifier: bundleIdentifierProvider(),
-            isAdminDisabled: isAdminDisabled,
             lastObservedDeviceState: lastObservedDeviceState,
             sentAt: now()
         )
@@ -214,12 +196,9 @@ final class LifecycleController: ObservableObject, LifecycleControlling {
     }
 
     private func helperDescription(from status: HelperLifecycleStatusPayload) -> String {
-        let mode = status.isAdminDisabled ? "admin-disabled" : "active"
         let heartbeat = status.lastHeartbeatAt.map(timestampString) ?? "none"
-        let poll = status.lastPollDescription ?? "none"
-        let relaunch = status.lastRelaunchDescription ?? "none"
         let action = status.lastActionDescription ?? "none"
-        return "mode=\(mode), heartbeat=\(heartbeat), poll=\(poll), relaunch=\(relaunch), action=\(action), state=\(status.lastObservedDeviceState)"
+        return "heartbeat=\(heartbeat), action=\(action), state=\(status.lastObservedDeviceState)"
     }
 
     private func timestampString(_ date: Date) -> String {

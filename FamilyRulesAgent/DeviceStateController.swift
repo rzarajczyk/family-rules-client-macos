@@ -85,8 +85,6 @@ final class DeviceStateController: ObservableObject, DeviceStateControlling {
         switch normalized {
         case "ACTIVE":
             statusDescription = "Active"
-        case "ADMIN_DISABLED":
-            statusDescription = "Admin Disabled"
         case "BLOCK_RESTRICTED_APPS":
             statusDescription = "Blocking Restricted Apps"
             restrictedAppBlockingEnabled = true

@@ -3,56 +3,7 @@ import XCTest
 
 @MainActor
 final class LifecycleControllerTests: XCTestCase {
-    func testEnteringAdminDisabledUpdatesPublishedStateAndNotifiesHelper() async throws {
-        let helperClient = HelperLifecycleClientStub()
-        let controller = LifecycleController(
-            helperClient: helperClient,
-            bundleIdentifierProvider: { "com.familyrules.agent" },
-            now: { Date(timeIntervalSince1970: 100) },
-            loginItemRegistrar: { "mainApp: enabled" }
-        )
-
-        controller.start(registration: registration)
-        try await waitForUpdateCount(helperClient, count: 1)
-
-        controller.updateServerDeviceState("APP_DISABLED", extra: nil)
-        try await waitForUpdateCount(helperClient, count: 2)
-
-        XCTAssertTrue(controller.isAdminDisabled)
-        XCTAssertEqual(controller.statusDescription, "Admin Disabled")
-        let payload1 = await helperClient.lastPayload()
-        let lastPayload = try XCTUnwrap(payload1)
-        XCTAssertTrue(lastPayload.isAdminDisabled)
-        XCTAssertEqual(lastPayload.lastObservedDeviceState, "ADMIN_DISABLED")
-    }
-
-    func testLeavingAdminDisabledRestoresProtectedState() async throws {
-        let helperClient = HelperLifecycleClientStub()
-        let controller = LifecycleController(
-            helperClient: helperClient,
-            bundleIdentifierProvider: { "com.familyrules.agent" },
-            now: { Date(timeIntervalSince1970: 100) },
-            loginItemRegistrar: { "mainApp: enabled" }
-        )
-
-        controller.start(registration: registration)
-        try await waitForUpdateCount(helperClient, count: 1)
-
-        controller.updateServerDeviceState("ADMIN_DISABLED", extra: nil)
-        try await waitForUpdateCount(helperClient, count: 2)
-
-        controller.updateServerDeviceState("ACTIVE", extra: nil)
-        try await waitForUpdateCount(helperClient, count: 3)
-
-        XCTAssertFalse(controller.isAdminDisabled)
-        XCTAssertEqual(controller.statusDescription, "Protected")
-        let payload2 = await helperClient.lastPayload()
-        let lastPayload2 = try XCTUnwrap(payload2)
-        XCTAssertFalse(lastPayload2.isAdminDisabled)
-    }
-
-    func testSameStateDoesNotChangeBooleanButStillPushesHeartbeat() async throws {
-        // F3: heartbeat should be refreshed even when the boolean doesn't change.
+    func testSameStateStillPushesHeartbeat() async throws {
         let helperClient = HelperLifecycleClientStub()
         let controller = LifecycleController(
             helperClient: helperClient,
@@ -70,13 +21,11 @@ final class LifecycleControllerTests: XCTestCase {
         controller.updateServerDeviceState("ACTIVE", extra: nil)
         try await waitForUpdateCount(helperClient, count: 3)
 
-        XCTAssertFalse(controller.isAdminDisabled)
         let count = await helperClient.updateCallCount()
         XCTAssertEqual(count, 3)
     }
 
-    func testStopNotifiesHelperWithAdminDisabledFalse() async throws {
-        // F5: stop() must push a final payload so the helper clears its timer.
+    func testStopNotifiesHelperWithInactiveState() async throws {
         let helperClient = HelperLifecycleClientStub()
         let controller = LifecycleController(
             helperClient: helperClient,
@@ -86,7 +35,7 @@ final class LifecycleControllerTests: XCTestCase {
         )
 
         controller.start(registration: registration)
-        controller.updateServerDeviceState("ADMIN_DISABLED", extra: nil)
+        controller.updateServerDeviceState("LOCK_SCREEN", extra: nil)
         try await waitForUpdateCount(helperClient, count: 2)
 
         controller.stop()
@@ -94,7 +43,6 @@ final class LifecycleControllerTests: XCTestCase {
 
         let payload3 = await helperClient.lastPayload()
         let lastPayload3 = try XCTUnwrap(payload3)
-        XCTAssertFalse(lastPayload3.isAdminDisabled)
         XCTAssertEqual(lastPayload3.lastObservedDeviceState, "ACTIVE")
         XCTAssertEqual(controller.statusDescription, "Inactive")
     }
@@ -124,7 +72,6 @@ final class LifecycleControllerTests: XCTestCase {
     }
 
     func testRefreshDiagnosticsPopulatesHelperStatusDescription() async throws {
-        // F9: refreshDiagnostics() coverage.
         let helperClient = HelperLifecycleClientStub()
         let controller = LifecycleController(
             helperClient: helperClient,
@@ -137,7 +84,7 @@ final class LifecycleControllerTests: XCTestCase {
         await controller.refreshDiagnostics()
 
         XCTAssertFalse(controller.helperStatusDescription.isEmpty)
-        XCTAssertTrue(controller.helperStatusDescription.contains("active"))
+        XCTAssertTrue(controller.helperStatusDescription.contains("heartbeat="))
     }
 
     func testRefreshDiagnosticsShowsErrorOnHelperFailure() async throws {
@@ -234,11 +181,8 @@ private actor HelperLifecycleClientStub: HelperLifecycleClientProtocol {
             throw StubError.fetchFailed
         }
         return HelperLifecycleStatusPayload(
-            isAdminDisabled: false,
             lastHeartbeatAt: nil,
             lastObservedDeviceState: "ACTIVE",
-            lastPollDescription: nil,
-            lastRelaunchDescription: nil,
             lastActionDescription: nil
         )
     }

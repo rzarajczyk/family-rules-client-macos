@@ -97,6 +97,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         activityMonitor.start()
         configureStatusItem()
         startRefreshLoop()
+        syncController.onLifecycleShutdown = { [weak self] action in
+            self?.performLifecycleShutdown(action)
+        }
 
         if let registration = appModel.registration {
             Task {
@@ -242,16 +245,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             guard let self else { return }
 
             syncController.stop()
-            var loginItemErrorMessage: String?
-
-            do {
-                try ServiceManagementBridge.unregisterMainAppIfAvailable()
-                syncController.recordUninstallLog("Unregistered FamilyRules login item")
-            } catch {
-                loginItemErrorMessage = error.localizedDescription
-                syncController.recordUninstallLog("Failed to unregister login item: \(error.localizedDescription)")
-            }
-
+            let loginItemErrorMessage = unregisterLoginItem()
             let result = await appModel.unregisterAndClearLocalState(log: { [weak self] message in
                 self?.syncController.recordUninstallLog(message)
             })
@@ -275,6 +269,35 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             dashboardWindowController?.close()
             diagnosticsWindowController?.close()
             openSetupWindow()
+        }
+    }
+
+    private func performLifecycleShutdown(_ action: LifecycleShutdownAction) {
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+
+            syncController.stop()
+            _ = unregisterLoginItem()
+
+            if action == .uninstall {
+                _ = await appModel.unregisterAndClearLocalState(log: { [weak self] message in
+                    self?.syncController.recordUninstallLog(message)
+                })
+            }
+
+            NSApp.terminate(nil)
+        }
+    }
+
+    @discardableResult
+    private func unregisterLoginItem() -> String? {
+        do {
+            try ServiceManagementBridge.unregisterMainAppIfAvailable()
+            syncController.recordUninstallLog("Unregistered FamilyRules login item")
+            return nil
+        } catch {
+            syncController.recordUninstallLog("Failed to unregister login item: \(error.localizedDescription)")
+            return error.localizedDescription
         }
     }
 

@@ -53,7 +53,7 @@ Observed legacy desktop behavior:
 - Tray/menu bar presence
 - Autostart with relaunch
 - Lock/logout states
-- Server-driven disable path via `APP_DISABLED`
+- Remote disable/uninstall via `DISABLE` / `UNINSTALL` server commands
 - Multi-monitor blocking overlays
 - Initial setup flow
 - Periodic reporting
@@ -63,7 +63,6 @@ Observed legacy desktop behavior:
   - `LOCKED_WITH_COUNTDOWN`
   - `LOGGED_OUT`
   - `LOGGED_OUT_WITH_COUNTDOWN`
-  - `APP_DISABLED`
 
 ## Product Direction
 
@@ -481,78 +480,88 @@ Behavior must mirror Android:
 
 Required for v1:
 - `SEND_LOGS`
+- `DISABLE`
+- `UNINSTALL`
 
-Implementation behavior:
-- collect current logs
-- package them in the expected result payload
+Capabilities advertised in `/api/v2/client-info`:
+- `LOGS_COMMAND` — gates `SEND_LOGS`
+- `DISABLE_COMMAND` — gates `DISABLE`
+- `UNINSTALL_COMMAND` — gates `UNINSTALL`
+
+Implementation behavior (shared pipeline):
+- receive command in `/api/v2/report` response or subsequent sync cycle
+- persist command locally in SQLite queue
+- upload ack through `/api/v2/command-acks`
+- execute command locally
+- upload result through `/api/v2/command-results`
 - mark command complete locally
-- upload command result through `/api/v2/command-results`
 
-The implementation should be extensible so more commands can be added later without redesigning the queue/execution model.
+### `SEND_LOGS`
 
-## Admin / Maintenance Path
+- collect current diagnostics logs
+- package them in the expected result payload
+- return `COMPLETED`
 
-The product must support a deliberate administrative disable path similar to the current desktop app's server-driven `APP_DISABLED` state.
+### `DISABLE` / `UNINSTALL` (admin maintenance commands)
 
-This path exists for:
-- upgrades
-- repair
+These replace the legacy server-driven `APP_DISABLED` device state. They are one-shot remote admin actions delivered through the command pipeline, not persistent device states.
+
+Use cases:
+- upgrades and repair
 - temporary maintenance
 - intentional remote shutdown by the parent/admin
+- full local wipe before reinstall
 
-### Required admin behavior
+#### `DISABLE`
 
-The macOS client should support a dedicated maintenance/disabled mode.
+When executed:
+- return `COMPLETED` to the server
+- after the result upload completes:
+  - stop sync/enforcement loops
+  - unregister the login item (remove autostart)
+  - terminate the agent process
+- preserve local registration, Keychain token, SQLite state, and diagnostics
 
-Recommended normalized state name:
-- `ADMIN_DISABLED`
+Manual relaunch behavior:
+- registration still exists locally
+- setup is skipped
+- `LifecycleController.start()` re-registers the login item
+- agent resumes normal operation
 
-Compatibility requirement:
-- also accept legacy `APP_DISABLED`
+#### `UNINSTALL`
 
-### `ADMIN_DISABLED` semantics
+When executed:
+- return `COMPLETED` to the server
+- after the result upload completes:
+  - stop sync/enforcement loops
+  - unregister the login item
+  - delete Keychain token and `~/Library/Application Support/FamilyRulesAgent/`
+  - terminate the agent process
 
-When entered:
-- stop enforcement
-- stop relaunching the agent aggressively
-- disable app blocking
-- disable lock/logout actions
-- remove or disable autostart for the agent if required by the maintenance design
-- keep enough minimal state to allow controlled reactivation
-- clearly mark in logs and local diagnostics that the app is in admin-disabled mode
+Manual relaunch behavior:
+- no local registration remains
+- initial setup window opens again
 
-Possible implementation variants:
-- soft disabled mode:
-  - app remains installed but dormant
-  - helper remains installed
-  - menu bar app may disappear
-- uninstall-prep mode:
-  - app unregisters login items/launch agents
-  - helper unregisters itself or enters inert mode
-  - local state is preserved until explicit uninstall completes
+#### Ordering requirement
 
-Recommended approach:
-- implement soft disabled mode first
-- keep full uninstall as a separate explicit admin action, not as a normal child-visible workflow
+`DISABLE` and `UNINSTALL` must not terminate or wipe local state before the command result is uploaded. Otherwise the SQLite command queue (and the pending `COMPLETED` result) can be lost.
 
-### Re-enabling from admin-disabled mode
+The agent therefore:
+1. executes the command and stores a local `COMPLETED` result
+2. uploads the result
+3. invokes a lifecycle shutdown callback that performs unregister / wipe / `NSApp.terminate`
 
-The system must support reactivation by:
-- server state returning to `ACTIVE`
-- local parent/admin repair tool if needed
+#### Resurrection vectors removed
 
-**Critical:** The helper must independently maintain a minimal reactivation polling path, separate from the agent.
+On macOS the only resurrection vectors are:
+1. `SMAppService.mainApp` login item
+2. helper-driven relaunch
 
-Reason: When `ADMIN_DISABLED` is entered, the agent's aggressive relaunch is suppressed and autostart may be removed. If the agent is then killed or stops running, nothing polls the server for a state change back to `ACTIVE`. The helper — which remains installed and running — must fill this gap.
+Both commands remove the login item. The helper no longer polls the server or relaunches the agent, so a successful `DISABLE` or `UNINSTALL` leaves no automatic way for the agent to come back until a user manually launches it.
 
-Helper reactivation behavior:
-- while in `ADMIN_DISABLED` mode, the helper polls the server at a low cadence (e.g. every 5 minutes) using the stored credentials from Keychain
-- if the server returns a non-`ADMIN_DISABLED` state, the helper restores agent autostart and relaunches the agent
-- this polling must be independent of whether the agent process is currently alive
+### Why commands instead of `APP_DISABLED`
 
-### Why this path is required
-
-Without an admin disable path, the same anti-removal features that protect against a child user would make upgrades, recovery, and legitimate remote shutdown unnecessarily hard.
+The legacy `APP_DISABLED` state only soft-disabled the running agent and the helper could still relaunch it, so the app never truly turned off. Explicit `DISABLE` / `UNINSTALL` commands terminate the process and remove autostart, which is the behavior parents expect for maintenance and uninstall.
 
 ## Device State Model
 
@@ -566,7 +575,6 @@ The macOS native client should support a unified state set:
 - `LOCK_SCREEN_WITH_TIMEOUT`
 - `LOGOUT`
 - `LOGOUT_WITH_TIMEOUT`
-- `ADMIN_DISABLED`
 
 ### Compatibility mapping
 
@@ -577,7 +585,6 @@ Map legacy desktop values as follows:
 - `LOCKED_WITH_COUNTDOWN` -> `LOCK_SCREEN_WITH_TIMEOUT`
 - `LOGGED_OUT` -> `LOGOUT`
 - `LOGGED_OUT_WITH_COUNTDOWN` -> `LOGOUT_WITH_TIMEOUT`
-- `APP_DISABLED` -> `ADMIN_DISABLED`
 
 ### Required server-side changes
 
@@ -586,7 +593,6 @@ The following state names are new and do not currently exist in the server's `av
 - `LOCK_SCREEN_WITH_TIMEOUT`
 - `LOGOUT`
 - `LOGOUT_WITH_TIMEOUT`
-- `ADMIN_DISABLED`
 
 The server team must add these to the `availableStates` registry before the macOS client can declare them in `client-info`. Until then, the macOS client must either:
 - use only the legacy names it knows the server already supports, or
@@ -625,14 +631,6 @@ This is a required coordination item before the Phase 2 server state features go
 #### `LOGOUT_WITH_TIMEOUT`
 - show countdown
 - then perform `LOGOUT`
-
-#### `ADMIN_DISABLED`
-- stop enforcement logic
-- stop watchdog relaunch escalation
-- stop app blocking
-- do not present child-facing enforcement UI
-- optionally unregister autostart as part of maintenance mode
-- preserve enough state for later recovery or uninstall
 
 ## Lock Screen and Overlay UX
 
@@ -855,7 +853,7 @@ Non-goals for v1:
 - uses Android icons/branding throughout the product
 - typical child-level user cannot quit or casually uninstall the product
 - local secrets are not stored in easy-to-edit plain files
-- app supports a server-driven admin-disabled path compatible with legacy `APP_DISABLED`
+- app supports remote `DISABLE` and `UNINSTALL` server commands for admin maintenance
 
 ## Risks
 
@@ -908,7 +906,7 @@ Proceed with:
 - visible-app model internally
 - foreground-only reporting to `/api/v2/report` in phase 1
 - compatibility with both Android and legacy desktop server state names
-- compatibility with legacy `APP_DISABLED` through a normalized `ADMIN_DISABLED` maintenance mode
+- remote admin maintenance through `DISABLE` / `UNINSTALL` commands instead of a persistent disabled device state
 - Android assets as the branding source
 
 This gives the macOS client Android-level product behavior without breaking the current server contract during the first rollout.

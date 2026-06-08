@@ -24,17 +24,13 @@ struct HelperRegistrationPayload: Codable, Equatable, Sendable {
 struct AgentStatusPayload: Codable, Equatable, Sendable {
     let registration: HelperRegistrationPayload
     let agentBundleIdentifier: String
-    let isAdminDisabled: Bool
     let lastObservedDeviceState: String
     let sentAt: Date
 }
 
 struct HelperLifecycleStatusPayload: Codable, Equatable, Sendable {
-    let isAdminDisabled: Bool
     let lastHeartbeatAt: Date?
     let lastObservedDeviceState: String
-    let lastPollDescription: String?
-    let lastRelaunchDescription: String?
     let lastActionDescription: String?
 }
 
@@ -73,8 +69,6 @@ struct StateCountdownPresentation: Equatable, Sendable {
 enum LifecycleStateBridge {
     static func normalize(_ rawValue: String) -> String {
         switch rawValue.uppercased() {
-        case "APP_DISABLED", "ADMIN_DISABLED":
-            return "ADMIN_DISABLED"
         case "LOCKED":
             return "LOCK_SCREEN"
         case "LOCKED_WITH_COUNTDOWN":
@@ -86,10 +80,6 @@ enum LifecycleStateBridge {
         default:
             return rawValue.uppercased()
         }
-    }
-
-    static func isAdminDisabled(_ rawValue: String) -> Bool {
-        normalize(rawValue) == "ADMIN_DISABLED"
     }
 
     static func helperAction(for rawValue: String) -> HelperDeviceAction? {

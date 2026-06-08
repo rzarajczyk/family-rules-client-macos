@@ -35,7 +35,10 @@ final class SyncControllerTests: XCTestCase {
         XCTAssertEqual(controller.lastDeviceState, "ACTIVE")
         let lastClientInfoPayloadValue = await client.lastClientInfoPayload()
         let lastClientInfoPayload = try XCTUnwrap(lastClientInfoPayloadValue)
-        XCTAssertEqual(lastClientInfoPayload.capabilities, ["LOGS_COMMAND", "COMMANDS_PULL", "MEDIA_PLAYBACK_REPORT", "MEDIA_PLAYBACK_BLOCK"])
+        XCTAssertEqual(
+            lastClientInfoPayload.capabilities,
+            ["LOGS_COMMAND", "COMMANDS_PULL", "MEDIA_PLAYBACK_REPORT", "MEDIA_PLAYBACK_BLOCK", "DISABLE_COMMAND", "UNINSTALL_COMMAND"]
+        )
     }
 
     func testStartSkipsReportWhenInactive() async throws {
@@ -104,39 +107,20 @@ final class SyncControllerTests: XCTestCase {
         XCTAssertEqual(clientInfoPayloadCount, 2)
     }
 
-    func testAdminDisabledStateSkipsSubsequentSyncWork() async throws {
-        let activityMonitor = ActivityMonitorStub(
-            snapshotValue: UsageSnapshot(
-                screenTimeSeconds: 30,
-                applications: ["com.apple.finder": 30],
-                activeApps: ["com.apple.finder"],
-                visibleApplications: ["com.apple.finder": 30],
-                visibleApps: ["com.apple.finder"],
-                knownApps: ["com.apple.finder": KnownAppInfo(identifier: "com.apple.finder", name: "Finder")],
-                isEligibleForReporting: true
-            )
+    func testDisableCommandProducesCompletedResultAndInvokesShutdownAfterUpload() async throws {
+        try await assertLifecycleCommand(
+            commandName: "DISABLE",
+            expectedShutdownAction: .disable,
+            expectedMessageFragment: "Disable command accepted"
         )
-        let client = ServerSyncClientStub(reportResponse: ReportResponsePayload(deviceState: "APP_DISABLED", extra: nil, serverCommands: []))
-        let lifecycleController = LifecycleControllerStub()
-        let controller = SyncController(
-            activityMonitor: activityMonitor,
-            syncClient: client,
-            lifecycleController: lifecycleController,
-            appVersionProvider: { "1.0.0" },
-            timezoneProvider: { 0 },
-            automaticLoops: false
+    }
+
+    func testUninstallCommandProducesCompletedResultAndInvokesShutdownAfterUpload() async throws {
+        try await assertLifecycleCommand(
+            commandName: "UNINSTALL",
+            expectedShutdownAction: .uninstall,
+            expectedMessageFragment: "Uninstall command accepted"
         )
-
-        await controller.start(registration: registration)
-        lifecycleController.markAdminDisabledFromServerState()
-        await controller.sendClientInfo(reason: "manual")
-        await controller.sendReportIfEligible(reason: "manual")
-
-        let clientInfoCount = await client.clientInfoPayloadCount()
-        let reportCount = await client.reportPayloadCount()
-        XCTAssertEqual(clientInfoCount, 1)
-        XCTAssertEqual(reportCount, 1)
-        XCTAssertEqual(controller.syncStatus, "Admin Disabled")
     }
 
     func testRestrictedAppStateFetchesBlockedAppsAndCachesIdentifiers() async throws {
@@ -452,6 +436,68 @@ final class SyncControllerTests: XCTestCase {
         XCTAssertEqual(secondController.pendingCommandCount, 0)
     }
 
+    private func assertLifecycleCommand(
+        commandName: String,
+        expectedShutdownAction: LifecycleShutdownAction,
+        expectedMessageFragment: String
+    ) async throws {
+        let activityMonitor = ActivityMonitorStub(
+            snapshotValue: UsageSnapshot(
+                screenTimeSeconds: 30,
+                applications: ["com.apple.finder": 30],
+                activeApps: ["com.apple.finder"],
+                visibleApplications: ["com.apple.finder": 30],
+                visibleApps: ["com.apple.finder"],
+                knownApps: ["com.apple.finder": KnownAppInfo(identifier: "com.apple.finder", name: "Finder")],
+                isEligibleForReporting: true
+            )
+        )
+        let client = ServerSyncClientStub(
+            reportResponse: ReportResponsePayload(
+                deviceState: "ACTIVE",
+                extra: nil,
+                serverCommands: [
+                    ServerCommandPayload(
+                        commandId: "cmd-lifecycle",
+                        commandName: commandName,
+                        issuedAt: "2026-05-09T10:00:00Z",
+                        protocolVersion: 1
+                    )
+                ]
+            )
+        )
+        let commandStore = InMemoryServerCommandStore()
+        let controller = SyncController(
+            activityMonitor: activityMonitor,
+            syncClient: client,
+            commandStore: commandStore,
+            diagnosticsLogStore: DiagnosticsLogStoreStub(),
+            appVersionProvider: { "1.0.0" },
+            timezoneProvider: { 0 },
+            automaticLoops: false
+        )
+        let tracker = LifecycleShutdownTracker()
+        controller.onLifecycleShutdown = { action in
+            tracker.recordShutdown(action: action)
+        }
+
+        await controller.start(registration: registration)
+
+        let resultPayloadValue = await client.lastCommandResultsPayload()
+        let resultPayload = try XCTUnwrap(resultPayloadValue)
+        XCTAssertEqual(resultPayload.commandResults.map(\.commandId), ["cmd-lifecycle"])
+        XCTAssertEqual(resultPayload.commandResults.first?.status, "COMPLETED")
+        XCTAssertTrue(resultPayload.commandResults.first?.message.contains(expectedMessageFragment) == true)
+        XCTAssertEqual(controller.pendingCommandCount, 0)
+        XCTAssertEqual(controller.lastCommandDescription, "\(commandName): completed")
+
+        let uploadCompleted = await client.resultUploadCompleted()
+        XCTAssertTrue(uploadCompleted)
+
+        let shutdownEvent = try XCTUnwrap(tracker.shutdownEvent)
+        XCTAssertEqual(shutdownEvent, expectedShutdownAction)
+    }
+
     private var registration: RegistrationRecord {
         RegistrationRecord(
             serverURL: "https://example.com",
@@ -460,6 +506,15 @@ final class SyncControllerTests: XCTestCase {
             instanceToken: "token-1",
             instanceName: "Desk Mac"
         )
+    }
+}
+
+@MainActor
+private final class LifecycleShutdownTracker {
+    private(set) var shutdownEvent: LifecycleShutdownAction?
+
+    func recordShutdown(action: LifecycleShutdownAction) {
+        shutdownEvent = action
     }
 }
 
@@ -494,6 +549,7 @@ private actor ServerSyncClientStub: ServerSyncClientProtocol {
     private var blockedPlaybackAppsCount = 0
     private var commandAckCount = 0
     private var commandResultCount = 0
+    private var didUploadCommandResults = false
     private var reportResponse: ReportResponsePayload
     private let blockedApps: [BlockedAppPayload]
     private let blockedPlaybackApps: [BlockedAppPayload]
@@ -547,6 +603,11 @@ private actor ServerSyncClientStub: ServerSyncClientProtocol {
     func sendCommandResults(_ payload: CommandResultsUploadPayload, registration: RegistrationRecord) async throws {
         commandResultCount += 1
         lastCommandResultsPayloadValue = payload
+        didUploadCommandResults = true
+    }
+
+    func resultUploadCompleted() -> Bool {
+        didUploadCommandResults
     }
 
     func clientInfoPayloadCount() -> Int {
@@ -580,6 +641,7 @@ private actor ServerSyncClientStub: ServerSyncClientProtocol {
     func setReportResponse(_ response: ReportResponsePayload) {
         reportResponse = response
     }
+
 }
 
 private final class InMemoryServerCommandStore: ServerCommandStoreProtocol {
@@ -686,7 +748,6 @@ private final class DiagnosticsLogStoreStub: DiagnosticsLogStoreProtocol {
 
 @MainActor
 private final class LifecycleControllerStub: LifecycleControlling {
-    private(set) var isAdminDisabled = false
     private(set) var statusDescription = "Inactive"
     private(set) var loginItemStatusDescription = "mainApp: notRegistered"
     private(set) var helperStatusDescription = "Unknown"
@@ -702,9 +763,8 @@ private final class LifecycleControllerStub: LifecycleControlling {
 
     func updateServerDeviceState(_ rawState: String, extra: String?) {
         let normalized = LifecycleStateBridge.normalize(rawState)
-        isAdminDisabled = LifecycleStateBridge.isAdminDisabled(normalized)
         restrictedAppBlockingEnabled = normalized == "BLOCK_RESTRICTED_APPS"
-        statusDescription = isAdminDisabled ? "Admin Disabled" : "Protected"
+        statusDescription = "Protected"
     }
 
     func performRestrictedAppFallbackTermination(targetIdentifier: String) async -> Bool {
@@ -712,7 +772,6 @@ private final class LifecycleControllerStub: LifecycleControlling {
     }
 
     func stop() {
-        isAdminDisabled = false
         statusDescription = "Inactive"
         restrictedAppBlockingEnabled = false
     }
@@ -724,9 +783,6 @@ private final class LifecycleControllerStub: LifecycleControlling {
         onRestrictedAppBlockingActivated?()
     }
 
-    func markAdminDisabledFromServerState() {
-        updateServerDeviceState("APP_DISABLED", extra: nil)
-    }
 }
 
 private actor PlaybackBlockerStub: PlaybackBlockingProtocol {
