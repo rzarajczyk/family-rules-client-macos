@@ -1,16 +1,18 @@
 # FamilyRules macOS Client
 
-This repository currently contains steps 1, 2, and part of step 3 from the implementation plan:
+Native macOS menu-bar agent for FamilyRules. See `000-SPEC.md` for the full product spec.
 
-- `FamilyRulesAgent`: a native macOS menu bar app
-- `FamilyRulesHelper`: an embedded XPC helper skeleton
-- helper ping diagnostics
-- initial setup window
-- `POST /api/v2/register-instance` integration
-- secure persistence split across SQLite and Keychain
-- startup and periodic `client-info` sync
-- startup and periodic `/report` sync while active
-- foreground-app and screen/session activity tracking
+Current implementation includes:
+
+- `FamilyRulesAgent`: menu bar app with setup, dashboard, diagnostics, device-state enforcement, and server sync
+- `FamilyRulesHelper`: XPC helper for privileged actions (lock screen, switch user, logout, terminate app, media playback probe)
+- registration, `client-info`, and `/report` sync
+- foreground/visible-app and screen/session activity tracking
+- server command pipeline: `SEND_LOGS`, `DISABLE`, `UNINSTALL`
+- restricted-app blocking with overlay UX
+- media playback reporting and blocking
+- server-backed "All My Devices" view
+- explicit local unregister flow
 
 ## Project Layout
 
@@ -19,6 +21,18 @@ This repository currently contains steps 1, 2, and part of step 3 from the imple
 - `FamilyRulesHelper/`: XPC helper code
 - `Shared/`: shared XPC protocol code
 - `Config/`: `Info.plist` and entitlements
+- `Docs/`: product spec (`000-SPEC.md`) and this guide
+
+## Helper Role
+
+`FamilyRulesHelper` is an XPC service invoked by the agent for privileged operations:
+
+- screen lock and switch-user (via `login.framework`)
+- logout (via AppleScript)
+- force-terminate a blocked app
+- media playback snapshot (via MediaRemote private framework)
+
+The helper does **not** poll the server or relaunch the agent. Autostart is managed by `SMAppService` login-item registration in the agent.
 
 ## Requirements
 
@@ -121,17 +135,20 @@ The token is stored in Keychain under:
 
 ## Dashboard Window
 
-Open it from the menu bar with `Open Dashboard`.
+Open it from the menu bar with `Open Dashboard` (left-click on the tray icon also opens the dashboard).
 
 It shows:
 
 - live screen time for the current day
 - current foreground app
-- current visible app count
-- foreground usage breakdown by app
-- visible-app usage breakdown by app
-- registration state
-- sync status and last report/client-info activity
+- foreground and visible-app usage breakdowns
+- registration and sync status
+
+The dashboard overflow menu (⋯) includes admin actions such as **Refresh Device State** and **Unregister This Mac**.
+
+### Refresh Device State
+
+Use **Refresh Device State** in the dashboard overflow menu to force an immediate `/report` sync and display the current server device state and any pending commands. This is useful when verifying that a state change from the server GUI has reached the Mac.
 
 ## All My Devices Window
 
@@ -154,23 +171,43 @@ Open it from the menu bar with `Open Diagnostics`.
 It shows:
 
 - registration status
-- saved server URL
-- saved username
-- saved instance name
-- saved instance ID
-- screen awake state
-- session active state
+- saved server URL, username, instance name, and instance ID
+- screen awake and session active state
 - foreground app
-- sync status
-- last `client-info`
-- last `/report`
-- last server device state
+- sync status and last `client-info` / `/report` activity
+- last server device state and command activity
 - recent sync log lines
-- helper reachability
-- last helper reply
-- service-management status
+- **log file location** (`~/Library/Application Support/FamilyRulesAgent/Diagnostics.log`) with an option to open it in Finder
+- helper reachability and last helper reply
+- login-item / service-management status
 
 You can also use `Open Setup` from the menu if you want to bring the setup window back manually.
+
+## Remote Admin Commands
+
+The macOS client advertises these capabilities in `/api/v2/client-info`:
+
+- `LOGS_COMMAND` — gates `SEND_LOGS`
+- `DISABLE_COMMAND` — gates `DISABLE`
+- `UNINSTALL_COMMAND` — gates `UNINSTALL`
+
+Parents can trigger `DISABLE` and `UNINSTALL` from the server GUI (Devices page → Device menu) when the device advertises the matching capability.
+
+### `DISABLE`
+
+- confirms the command with the server, then shuts down
+- unregisters the login item (stops autostart)
+- **preserves** local registration, Keychain token, and SQLite data
+- manual relaunch resumes normal operation and re-registers autostart
+
+### `UNINSTALL`
+
+- confirms the command with the server, then shuts down
+- unregisters the login item
+- **wipes** Keychain token and `~/Library/Application Support/FamilyRulesAgent/`
+- manual relaunch opens initial setup again
+
+These replace the legacy `APP_DISABLED` device state, which could not reliably stop the agent because the helper would relaunch it. The helper no longer polls the server or relaunches the agent.
 
 ## Unregister This Mac
 
@@ -205,59 +242,52 @@ xcodebuild -project FamilyRulesClient.xcodeproj -scheme FamilyRulesAgent -config
 
 The current test suite covers:
 
-- `AppModel` registration loading and save behavior
+- `AppModel` registration loading, save, and unregister behavior
 - `RegistrationClient` request construction, unregister, and groups-usage-report decoding
 - `AllDevicesModel` server-backed group loading and error handling
 - `UsageAccumulator` foreground/screen-time accounting
 - `ServerSyncClient` `client-info` and `report` request handling
-- `SyncController` startup sync and active/inactive report behavior
+- `SyncController` startup sync, active/inactive report behavior, `SEND_LOGS`, and `DISABLE`/`UNINSTALL` lifecycle commands
+- `DiagnosticsLogStore` log rotation and trimming
 
-## Manual Test For Steps 3-10
+## Manual Smoke Test
 
 1. Run the app from Xcode.
 2. Confirm the setup window appears automatically if the app is not registered yet.
 3. Complete registration with real server credentials.
-4. Confirm the setup advances to the permissions step instead of opening dashboard or diagnostics.
-5. Grant Accessibility permission and click `Done`.
-6. Confirm the setup window closes and only the dashboard opens.
-7. Keep the session unlocked with the screen awake for at least 30 seconds.
-8. Open the dashboard and confirm screen time and usage sections are populated.
-9. Switch between apps and confirm `Foreground App` and dashboard usage values update.
-10. Open diagnostics manually and confirm `Last Client-Info` and `Last Report` update.
-11. Confirm `Last Device State` reflects the server response from `/report`.
-12. Stop the app.
-13. Run it again.
-14. Confirm setup does not appear again.
-15. Open dashboard and diagnostics and confirm the saved registration is still loaded.
-16. Open `All My Devices` and confirm grouped usage cards load from the server.
-17. Use `Unregister This Mac` and confirm the app returns to setup mode.
-18. Verify `~/Library/Application Support/FamilyRulesAgent/` no longer contains the local databases/log after unregister.
+4. Grant Accessibility permission when prompted.
+5. Keep the session unlocked with the screen awake for at least 30 seconds.
+6. Open the dashboard and confirm screen time and usage sections are populated.
+7. Switch between apps and confirm usage values update.
+8. Open diagnostics and confirm `Last Client-Info` and `Last Report` update.
+9. Use **Refresh Device State** in the dashboard menu and confirm the current server state is shown.
+10. Stop the app and run it again — setup should not reappear.
+11. Open `All My Devices` and confirm grouped usage cards load from the server.
+12. From the server GUI, send **Request logs** and confirm the client uploads logs.
+13. Use `Unregister This Mac` and confirm the app returns to setup mode.
+14. Verify `~/Library/Application Support/FamilyRulesAgent/` no longer contains local databases/log after unregister.
 
-## What Steps 3-10 Include
+## Implemented Features
 
-- initial setup UI
-- registration against `POST /api/v2/register-instance`
+- initial setup UI and registration against `POST /api/v2/register-instance`
 - registration persistence in SQLite and Keychain
-- startup logic for registered vs unregistered state
-- diagnostics updated to show registration state
 - startup and 10-minute `client-info` scheduling
 - startup and 30-second `/report` scheduling while active
-- foreground-app tracking for report payloads
-- visible-app tracking for local accounting
-- basic local sync logging and sync status in diagnostics/menu
-- parent-facing dashboard with live usage summary and per-app breakdowns
+- foreground and visible-app tracking
+- parent-facing dashboard with live usage summary
 - server-backed `All My Devices` window
+- device state enforcement (lock, switch user, restricted apps, media playback block)
+- command queue persistence with `SEND_LOGS`, `DISABLE`, and `UNINSTALL`
 - explicit unregister flow with server deregistration and local cleanup
-- command queue persistence and `SEND_LOGS`
+- diagnostics log file with rotation
 
-## What Is Still Not Included Yet
+## What Is Still Not Included
 
-- watchdog relaunch
-- permissions flow
-- historical dashboard trends
+- watchdog relaunch after agent kill (helper no longer auto-relaunches)
 - signed `.pkg` build/notarization artifacts checked into this repo
+- dashboard UX refinements tracked in `001.md` (tabs, scrolling, menu consolidation)
 
-Those are planned in later steps in `PLAN.md`.
+See `000-SPEC.md` for the full delivery plan and acceptance criteria.
 
 ## Troubleshooting
 

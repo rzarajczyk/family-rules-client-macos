@@ -50,6 +50,9 @@
 		A100002D000000000000000B /* PlaybackBlocker.swift in Sources */ = {isa = PBXBuildFile; fileRef = A100013D000000000000000B /* PlaybackBlocker.swift */; };
 		A100002E000000000000000C /* NowPlayingCliTool.swift in Sources */ = {isa = PBXBuildFile; fileRef = A100013F000000000000000C /* NowPlayingCliTool.swift */; };
 		A100002F000000000000000D /* RefreshStateDialog.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000140000000000000000D /* RefreshStateDialog.swift */; };
+		A1000036000000000000000E /* DiagnosticsLogSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000141000000000000000E /* DiagnosticsLogSupport.swift */; };
+		A1000037000000000000000E /* DiagnosticsLogSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000141000000000000000E /* DiagnosticsLogSupport.swift */; };
+		A1000038000000000000000E /* DiagnosticsLogStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000142000000000000000E /* DiagnosticsLogStoreTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -112,6 +115,8 @@
 		A100013D000000000000000B /* PlaybackBlocker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaybackBlocker.swift; sourceTree = "<group>"; };
 		A100013F000000000000000C /* NowPlayingCliTool.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NowPlayingCliTool.swift; sourceTree = "<group>"; };
 		A1000140000000000000000D /* RefreshStateDialog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RefreshStateDialog.swift; sourceTree = "<group>"; };
+		A1000141000000000000000E /* DiagnosticsLogSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiagnosticsLogSupport.swift; sourceTree = "<group>"; };
+		A1000142000000000000000E /* DiagnosticsLogStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiagnosticsLogStoreTests.swift; sourceTree = "<group>"; };
 		A100013E000000000000000C /* MediaRemoteProbeSource.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = MediaRemoteProbeSource.txt; sourceTree = "<group>"; };
 		A10001380000000000000009 /* en */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = en; path = en.lproj/Localizable.strings; sourceTree = "<group>"; };
 		A10001390000000000000009 /* Localizable.strings */ = {isa = PBXVariantGroup; children = (A10001380000000000000009 /* en */, A100013A0000000000000009 /* pl */, ); name = Localizable.strings; sourceTree = "<group>"; };
@@ -221,6 +226,7 @@
 		A10008040000000000000001 /* Shared */ = {
 			isa = PBXGroup;
 			children = (
+				A1000141000000000000000E /* DiagnosticsLogSupport.swift */,
 				A10001060000000000000001 /* FamilyRulesHelperXPCProtocol.swift */,
 			);
 			path = Shared;
@@ -251,6 +257,7 @@
 			isa = PBXGroup;
 			children = (
 				A10001300000000000000007 /* AllDevicesModelTests.swift */,
+				A1000142000000000000000E /* DiagnosticsLogStoreTests.swift */,
 				A10001130000000000000002 /* AppModelTests.swift */,
 				A10001280000000000000006 /* DeviceStateControllerTests.swift */,
 				A10001250000000000000005 /* LifecycleControllerTests.swift */,
@@ -447,6 +454,7 @@
 				A100002D000000000000000B /* PlaybackBlocker.swift in Sources */,
 				A100002E000000000000000C /* NowPlayingCliTool.swift in Sources */,
 				A10000060000000000000001 /* FamilyRulesHelperXPCProtocol.swift in Sources */,
+				A1000036000000000000000E /* DiagnosticsLogSupport.swift in Sources */,
 				A10000100000000000000002 /* RegistrationClient.swift in Sources */,
 				A100000B0000000000000008 /* SessionActionExecutor.swift in Sources */,
 				A10000110000000000000002 /* RegistrationStore.swift in Sources */,
@@ -463,6 +471,7 @@
 			files = (
 				A10000070000000000000001 /* main.swift in Sources */,
 				A10000080000000000000001 /* FamilyRulesHelperXPCProtocol.swift in Sources */,
+				A1000037000000000000000E /* DiagnosticsLogSupport.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -471,6 +480,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				A10000290000000000000007 /* AllDevicesModelTests.swift in Sources */,
+				A1000038000000000000000E /* DiagnosticsLogStoreTests.swift in Sources */,
 				A10000130000000000000002 /* AppModelTests.swift in Sources */,
 				A10000270000000000000006 /* DeviceStateControllerTests.swift in Sources */,
 				A10000240000000000000005 /* LifecycleControllerTests.swift in Sources */,

@@ -37,7 +37,7 @@ final class SyncControllerTests: XCTestCase {
         let lastClientInfoPayload = try XCTUnwrap(lastClientInfoPayloadValue)
         XCTAssertEqual(
             lastClientInfoPayload.capabilities,
-            ["LOGS_COMMAND", "COMMANDS_PULL", "MEDIA_PLAYBACK_REPORT", "MEDIA_PLAYBACK_BLOCK", "DISABLE_COMMAND", "UNINSTALL_COMMAND"]
+            ["SEND_LOGS_COMMAND", "COMMANDS_PULL", "MEDIA_PLAYBACK_REPORT", "MEDIA_PLAYBACK_BLOCK", "DISABLE_COMMAND", "UNINSTALL_COMMAND"]
         )
     }
 

@@ -240,12 +240,12 @@ final class SyncController: ObservableObject {
             timezoneOffsetSeconds: timezoneProvider(),
             reportIntervalSeconds: reportIntervalSeconds,
             knownApps: snapshot.knownApps.mapValues { KnownAppPayload(appName: $0.name, iconBase64Png: iconBase64Png(for: $0.identifier)) },
-            capabilities: ["LOGS_COMMAND", "COMMANDS_PULL", "MEDIA_PLAYBACK_REPORT", "MEDIA_PLAYBACK_BLOCK", "DISABLE_COMMAND", "UNINSTALL_COMMAND"]
+            capabilities: ["SEND_LOGS_COMMAND", "COMMANDS_PULL", "MEDIA_PLAYBACK_REPORT", "MEDIA_PLAYBACK_BLOCK", "DISABLE_COMMAND", "UNINSTALL_COMMAND"]
         )
 
         do {
             try await syncClient.sendClientInfo(payload, registration: registration)
-            lastClientInfoDescription = "\(timestamp()) via \(reason)"
+            lastClientInfoDescription = "\(DiagnosticsLogFormatting.timestamp()) via \(reason)"
             lastErrorMessage = nil
             syncStatus = syncStatus == "Paused" ? "Paused" : "Healthy"
             recordLog("Sent client-info (\(reason)) with \(payload.knownApps.count) known apps")
@@ -320,7 +320,7 @@ final class SyncController: ObservableObject {
                 registration: registration
             )
 
-            lastReportDescription = "\(timestamp()) via \(reason)"
+            lastReportDescription = "\(DiagnosticsLogFormatting.timestamp()) via \(reason)"
             lastDeviceState = response.deviceState
             lifecycleController?.updateServerDeviceState(response.deviceState, extra: response.extra)
             await refreshBlockedAppsIfNeeded(reason: reason, deviceState: response.deviceState)
@@ -710,7 +710,7 @@ final class SyncController: ObservableObject {
     }
 
     private func recordLog(_ message: String) {
-        let line = "[\(timestamp())] \(message)"
+        let line = "[\(DiagnosticsLogFormatting.timestamp())] \(message)"
 
         do {
             try diagnosticsLogStore.append(line: line)
@@ -724,18 +724,7 @@ final class SyncController: ObservableObject {
         }
     }
 
-    private static let timeFormatter: DateFormatter = {
-        let formatter = DateFormatter()
-        formatter.timeStyle = .medium
-        formatter.dateStyle = .none
-        return formatter
-    }()
-
     private static let iso8601Formatter: ISO8601DateFormatter = ISO8601DateFormatter()
-
-    private func timestamp() -> String {
-        SyncController.timeFormatter.string(from: Date())
-    }
 
     private func timestampString(_ date: Date) -> String {
         SyncController.iso8601Formatter.string(from: date)

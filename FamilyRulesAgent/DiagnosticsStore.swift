@@ -55,23 +55,12 @@ final class DiagnosticsStore: ObservableObject {
 
 enum DiagnosticsLogger {
     static func record(_ message: String) {
-        let line = "[\(timestamp())] \(message)"
+        let line = "[\(DiagnosticsLogFormatting.timestamp())] \(message)"
         try? DiagnosticsLogStore().append(line: line)
     }
 
     static func record(error: Error, context: String) {
         record("ERROR: \(context): \(error.localizedDescription)")
-    }
-
-    private static let formatter: DateFormatter = {
-        let formatter = DateFormatter()
-        formatter.timeStyle = .medium
-        formatter.dateStyle = .none
-        return formatter
-    }()
-
-    private static func timestamp() -> String {
-        formatter.string(from: Date())
     }
 }
 
@@ -104,17 +93,7 @@ final class DiagnosticsLogStore: DiagnosticsLogStoreProtocol {
     }
 
     func append(line: String) throws {
-        try ensureParentDirectory()
-
-        let data = Data((line + "\n").utf8)
-        if fileManager.fileExists(atPath: fileURL.path(percentEncoded: false)) {
-            let handle = try FileHandle(forWritingTo: fileURL)
-            defer { try? handle.close() }
-            try handle.seekToEnd()
-            try handle.write(contentsOf: data)
-        } else {
-            try data.write(to: fileURL, options: .atomic)
-        }
+        try DiagnosticsLogFileIO.append(line: line, to: fileURL, fileManager: fileManager)
     }
 
     /// Returns all lines in chronological order (oldest first), suitable for
@@ -132,12 +111,6 @@ final class DiagnosticsLogStore: DiagnosticsLogStoreProtocol {
             .filter { !$0.isEmpty }
     }
 
-    private func ensureParentDirectory() throws {
-        try fileManager.createDirectory(
-            at: fileURL.deletingLastPathComponent(),
-            withIntermediateDirectories: true
-        )
-    }
 }
 
 enum AgentPersistencePaths {

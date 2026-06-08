@@ -159,7 +159,8 @@ protocol MediaRemotePlaybackProbeProtocol: Sendable {
 
 extension MediaRemotePlaybackProbeProtocol {
     func snapshot() -> PlaybackAppSnapshot? {
-        snapshot(timeout: 2)
+        // nowplaying-cli typically needs ~2.8s when MediaRemote is idle; 2s caused spurious timeouts.
+        snapshot(timeout: 4)
     }
 }
 

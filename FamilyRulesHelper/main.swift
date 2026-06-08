@@ -239,35 +239,12 @@ private enum DiagnosticsLogger {
     }()
 
     static func record(_ message: String) {
-        let line = "[\(timestamp())] \(message)"
-        let data = Data((line + "\n").utf8)
-        let fileManager = FileManager.default
-
-        try? fileManager.createDirectory(at: logURL.deletingLastPathComponent(), withIntermediateDirectories: true)
-        if fileManager.fileExists(atPath: logURL.path(percentEncoded: false)) {
-            if let handle = try? FileHandle(forWritingTo: logURL) {
-                defer { try? handle.close() }
-                try? handle.seekToEnd()
-                try? handle.write(contentsOf: data)
-            }
-        } else {
-            try? data.write(to: logURL, options: .atomic)
-        }
+        let line = "[\(DiagnosticsLogFormatting.timestamp())] \(message)"
+        try? DiagnosticsLogFileIO.append(line: line, to: logURL)
     }
 
     static func record(error: Error, context: String) {
         record("ERROR: \(context): \(error.localizedDescription)")
-    }
-
-    private static let formatter: DateFormatter = {
-        let formatter = DateFormatter()
-        formatter.timeStyle = .medium
-        formatter.dateStyle = .none
-        return formatter
-    }()
-
-    private static func timestamp() -> String {
-        formatter.string(from: Date())
     }
 }
 
