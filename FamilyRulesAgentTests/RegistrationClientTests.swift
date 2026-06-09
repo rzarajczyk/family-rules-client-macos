@@ -223,6 +223,26 @@ final class RegistrationClientTests: XCTestCase {
         XCTAssertEqual(payload.groups.first?.applications.first?.iconBase64Png, "aWNvbg==")
     }
 
+    func testFetchGroupsUsageReportParsesServerAppGroupsPayload() async throws {
+        let client = RegistrationClient(session: makeSession())
+
+        MockURLProtocol.handler = { request in
+            try requireEqual(request.url?.absoluteString, "https://example.com/api/v2/groups-usage-report")
+            let response = HTTPURLResponse(url: try requireValue(request.url, "Missing request URL"), statusCode: 200, httpVersion: nil, headerFields: nil)!
+            let data = Data(#"{"appGroups":[{"appGroupId":"g1","appGroupName":"Games","totalTimeSeconds":900,"apps":[{"appPath":"com.game","appName":"Game","deviceName":"Phone","deviceId":"d1","uptimeSeconds":900,"iconBase64Png":null}]}]}"#.utf8)
+            return (response, data)
+        }
+
+        let payload = try await client.fetchGroupsUsageReport(registration: registration)
+
+        XCTAssertEqual(payload.groups.count, 1)
+        XCTAssertEqual(payload.groups.first?.groupName, "Games")
+        XCTAssertEqual(payload.groups.first?.totalSeconds, 900)
+        XCTAssertEqual(payload.groups.first?.applications.first?.appName, "Game")
+        XCTAssertEqual(payload.groups.first?.applications.first?.deviceName, "Phone")
+        XCTAssertEqual(payload.groups.first?.applications.first?.durationSeconds, 900)
+    }
+
     private func makeSession() -> URLSession {
         let configuration = URLSessionConfiguration.ephemeral
         configuration.protocolClasses = [MockURLProtocol.self]

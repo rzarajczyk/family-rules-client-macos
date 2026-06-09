@@ -158,6 +158,22 @@ struct RegistrationResult {
 
 struct GroupsUsageReportPayload: Decodable, Equatable {
     let groups: [DeviceUsageGroupPayload]
+
+    private enum CodingKeys: String, CodingKey {
+        case groups
+        case appGroups
+    }
+
+    init(groups: [DeviceUsageGroupPayload]) {
+        self.groups = groups
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        groups = try container.decodeIfPresent([DeviceUsageGroupPayload].self, forKey: .groups)
+            ?? container.decodeIfPresent([DeviceUsageGroupPayload].self, forKey: .appGroups)
+            ?? []
+    }
 }
 
 struct DeviceUsageGroupPayload: Decodable, Equatable {
@@ -167,6 +183,7 @@ struct DeviceUsageGroupPayload: Decodable, Equatable {
 
     private enum CodingKeys: String, CodingKey {
         case groupName
+        case appGroupName
         case totalSeconds
         case totalTimeSeconds
         case applications
@@ -182,7 +199,9 @@ struct DeviceUsageGroupPayload: Decodable, Equatable {
 
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        groupName = try container.decodeIfPresent(String.self, forKey: .groupName) ?? "Unnamed Group"
+        groupName = try container.decodeIfPresent(String.self, forKey: .groupName)
+            ?? container.decodeIfPresent(String.self, forKey: .appGroupName)
+            ?? "Unnamed Group"
         totalSeconds = try container.decodeIfPresent(Int.self, forKey: .totalSeconds)
             ?? container.decodeIfPresent(Int.self, forKey: .totalTimeSeconds)
             ?? 0
@@ -207,6 +226,7 @@ struct DeviceUsageApplicationPayload: Decodable, Equatable {
         case durationSeconds
         case duration
         case usageDurationSeconds
+        case uptimeSeconds
         case iconBase64Png
         case icon
     }
@@ -229,6 +249,7 @@ struct DeviceUsageApplicationPayload: Decodable, Equatable {
         durationSeconds = try container.decodeIfPresent(Int.self, forKey: .durationSeconds)
             ?? container.decodeIfPresent(Int.self, forKey: .duration)
             ?? container.decodeIfPresent(Int.self, forKey: .usageDurationSeconds)
+            ?? container.decodeIfPresent(Int.self, forKey: .uptimeSeconds)
             ?? 0
         iconBase64Png = try container.decodeIfPresent(String.self, forKey: .iconBase64Png)
             ?? container.decodeIfPresent(String.self, forKey: .icon)
