@@ -743,6 +743,8 @@ final class SyncController: ObservableObject {
             "DISABLE_COMMAND",
             "UNINSTALL_COMMAND",
             "ALL_MY_DEVICES_DISPLAY",
+            "RESTRICTED_APPS_BLOCK",
+            "FULL_DEVICE_BLOCK",
         ]
         if nowPlayingCliInstalled {
             capabilities.append(contentsOf: ["MEDIA_PLAYBACK_REPORT", "MEDIA_PLAYBACK_BLOCK"])

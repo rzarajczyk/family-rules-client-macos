@@ -44,11 +44,11 @@ final class SyncControllerTests: XCTestCase {
     func testAdvertisedCapabilitiesIncludePlaybackOnlyWhenNowPlayingCliInstalled() {
         XCTAssertEqual(
             SyncController.advertisedCapabilities(nowPlayingCliInstalled: false),
-            ["SEND_LOGS_COMMAND", "COMMANDS_PULL", "DISABLE_COMMAND", "UNINSTALL_COMMAND", "ALL_MY_DEVICES_DISPLAY"]
+            ["SEND_LOGS_COMMAND", "COMMANDS_PULL", "DISABLE_COMMAND", "UNINSTALL_COMMAND", "ALL_MY_DEVICES_DISPLAY", "RESTRICTED_APPS_BLOCK", "FULL_DEVICE_BLOCK"]
         )
         XCTAssertEqual(
             SyncController.advertisedCapabilities(nowPlayingCliInstalled: true),
-            ["SEND_LOGS_COMMAND", "COMMANDS_PULL", "DISABLE_COMMAND", "UNINSTALL_COMMAND", "ALL_MY_DEVICES_DISPLAY", "MEDIA_PLAYBACK_REPORT", "MEDIA_PLAYBACK_BLOCK"]
+            ["SEND_LOGS_COMMAND", "COMMANDS_PULL", "DISABLE_COMMAND", "UNINSTALL_COMMAND", "ALL_MY_DEVICES_DISPLAY", "RESTRICTED_APPS_BLOCK", "FULL_DEVICE_BLOCK", "MEDIA_PLAYBACK_REPORT", "MEDIA_PLAYBACK_BLOCK"]
         )
     }
 
